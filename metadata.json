@@ -1,0 +1,5 @@
+{
+  "name": "BTC Confluence Pro",
+  "description": "A SaaS platform providing BTC/USD trading signals based on a robust technical strategy combining RSI, VWAP, VWAP Bands, and an 80-period Moving Average.",
+  "requestFramePermissions": []
+}
