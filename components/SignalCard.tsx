@@ -29,6 +29,27 @@ const getSignalStyles = (action: SignalAction | undefined) => {
   }
 };
 
+const getEntryDetails = (action: SignalAction) => {
+    switch (action) {
+        case SignalAction.BUY:
+            return {
+                label: "Melhor Faixa de Compra",
+                color: "text-green-400",
+            };
+        case SignalAction.SELL:
+            return {
+                label: "Melhor Faixa de Venda",
+                color: "text-red-400",
+            };
+        default: // HOLD
+            return {
+                label: "Faixa de Referência",
+                color: "text-gray-400",
+            };
+    }
+};
+
+
 export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
   if (!signal) {
     return (
@@ -39,6 +60,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
   }
 
   const styles = getSignalStyles(signal.action);
+  const entryDetails = getEntryDetails(signal.action);
   const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
@@ -61,10 +83,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-sm text-cyan-400">Melhor Faixa de Entrada</p>
-            <p className="text-xl font-semibold text-cyan-300">{`${formattedPrice(signal.entryRange.min)}`}</p>
-             <p className="text-sm font-semibold text-cyan-300/80">a</p>
-             <p className="text-xl font-semibold text-cyan-300">{`${formattedPrice(signal.entryRange.max)}`}</p>
+            <p className={`text-sm font-semibold ${entryDetails.color}`}>{entryDetails.label}</p>
+            <p className={`text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.min)}`}</p>
+             <p className={`text-sm font-semibold ${entryDetails.color}/80`}>a</p>
+             <p className={`text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.max)}`}</p>
           </div>
           <div>
             <p className="text-sm text-red-400">Stop Loss</p>
