@@ -1,4 +1,4 @@
-import { SignalAction, type Signal, type PivotPoints } from '../types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands } from '../types';
 
 // --- Pivot Point Calculation ---
 export const calculateClassicPivotPoints = (high: number, low: number, close: number): PivotPoints => {
@@ -104,12 +104,16 @@ const findClosestLevel = (price: number, levels: { label: string; value: number 
  * @param currentPrice The live price of BTC/USD.
  * @param pivots The calculated pivot points and fibonacci levels.
  * @param vwap The calculated VWAP levels for daily, weekly, and monthly timeframes.
+ * @param vwapBands The calculated daily VWAP bands.
+ * @param weeklyVwapBands The calculated weekly VWAP bands.
  * @returns A new Signal object.
  */
 export const updateAndGenerateSignal = (
   currentPrice: number, 
   pivots: PivotPoints,
-  vwap: { daily: number; weekly: number; monthly: number; }
+  vwap: { daily: number; weekly: number; monthly: number; },
+  vwapBands: VwapBands | null,
+  weeklyVwapBands: VwapBands | null
 ): Signal => {
   if (signalDuration <= 0) {
     const lastAction = currentSignalAction;
@@ -138,6 +142,24 @@ export const updateAndGenerateSignal = (
         { label: 'Ret. Compra 61.8%', value: pivots.fiboRetBuy61 },
         { label: 'Ret. Compra 100%', value: pivots.fiboRetBuy100 },
       ];
+      if (vwapBands) {
+        supportLevels.push(
+            { label: '1ª Banda Inf. (Compra)', value: vwapBands.band1.lower },
+            { label: '2ª Banda Inf. (Compra)', value: vwapBands.band2.lower },
+            { label: '3ª Banda Inf. (Compra)', value: vwapBands.band3.lower },
+            { label: '4ª Banda Inf. (Compra)', value: vwapBands.band4.lower },
+            { label: '5ª Banda Inf. (Compra)', value: vwapBands.band5.lower }
+        );
+      }
+      if (weeklyVwapBands) {
+        supportLevels.push(
+            { label: '1ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band1.lower },
+            { label: '2ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band2.lower },
+            { label: '3ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band3.lower },
+            { label: '4ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band4.lower },
+            { label: '5ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band5.lower }
+        );
+      }
       const closestSupport = findClosestLevel(currentPrice, supportLevels, 'support');
       
       reasons = [...baseBuyReasons, ...vwapReasons];
@@ -156,6 +178,24 @@ export const updateAndGenerateSignal = (
         { label: 'Ret. Venda 61.8%', value: pivots.fiboRetSell61 },
         { label: 'Ret. Venda 100%', value: pivots.fiboRetSell100 },
       ];
+      if (vwapBands) {
+        resistanceLevels.push(
+            { label: '1ª Banda Sup. (Venda)', value: vwapBands.band1.upper },
+            { label: '2ª Banda Sup. (Venda)', value: vwapBands.band2.upper },
+            { label: '3ª Banda Sup. (Venda)', value: vwapBands.band3.upper },
+            { label: '4ª Banda Sup. (Venda)', value: vwapBands.band4.upper },
+            { label: '5ª Banda Sup. (Venda)', value: vwapBands.band5.upper }
+        );
+      }
+      if (weeklyVwapBands) {
+        resistanceLevels.push(
+            { label: '1ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band1.upper },
+            { label: '2ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band2.upper },
+            { label: '3ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band3.upper },
+            { label: '4ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band4.upper },
+            { label: '5ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band5.upper }
+        );
+      }
        const closestResistance = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
 
       reasons = [...baseSellReasons, ...vwapReasons];

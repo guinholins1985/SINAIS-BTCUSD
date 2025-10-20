@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { SignalAction, type Signal, type PivotPoints } from './types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands } from './types';
 import { SignalCard } from './components/SignalCard';
 import { updateAndGenerateSignal, calculateClassicPivotPoints } from './services/mockSignalService';
 
@@ -10,7 +9,14 @@ const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'curren
 
 const PivotLevel: React.FC<{ label: string, value: number, color: string, isHighlighted?: boolean }> = ({ label, value, color, isHighlighted }) => (
   <div className={`flex justify-between items-center py-1 text-sm rounded px-2 ${isHighlighted ? 'bg-cyan-500/10' : ''}`}>
-    <span className={`font-semibold ${isHighlighted ? 'text-cyan-300 font-bold' : color}`}>{label}</span>
+    <div className="flex items-center gap-2">
+      <span className={`font-semibold ${isHighlighted ? 'text-cyan-300 font-bold' : color}`}>{label}</span>
+      {isHighlighted && (
+        <span className="text-xs bg-cyan-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">
+          GATILHO
+        </span>
+      )}
+    </div>
     <span className={`font-mono ${isHighlighted ? 'text-cyan-300 font-bold' : 'text-gray-300'}`}>{formattedPrice(value)}</span>
   </div>
 );
@@ -18,10 +24,12 @@ const PivotLevel: React.FC<{ label: string, value: number, color: string, isHigh
 interface PivotPointsCardProps {
   pivots: PivotPoints | null;
   signal: Signal | null;
+  vwapBands: VwapBands | null;
+  weeklyVwapBands: VwapBands | null;
 }
 
-const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => {
-  if (!pivots || !signal) {
+const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapBands, weeklyVwapBands }) => {
+  if (!pivots || !signal || !vwapBands || !weeklyVwapBands) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 flex justify-center items-center h-full min-h-[420px]">
         <p className="text-gray-400">Calculando Níveis Chave...</p>
@@ -64,8 +72,34 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
     { label: 'Ext. Venda 100%', value: fiboExtSell100, color: 'text-purple-400' },
     { label: 'Ext. Venda 200%', value: fiboExtSell200, color: 'text-purple-500' },
   ].sort((a, b) => b.value - a.value);
+  
+  const vwapBandLevels = [
+    { label: '5ª Banda Sup. (Venda)', value: vwapBands.band5.upper, color: 'text-red-400' },
+    { label: '4ª Banda Sup. (Venda)', value: vwapBands.band4.upper, color: 'text-red-400' },
+    { label: '3ª Banda Sup. (Venda)', value: vwapBands.band3.upper, color: 'text-red-400' },
+    { label: '2ª Banda Sup. (Venda)', value: vwapBands.band2.upper, color: 'text-red-400' },
+    { label: '1ª Banda Sup. (Venda)', value: vwapBands.band1.upper, color: 'text-red-400' },
+    { label: '1ª Banda Inf. (Compra)', value: vwapBands.band1.lower, color: 'text-green-400' },
+    { label: '2ª Banda Inf. (Compra)', value: vwapBands.band2.lower, color: 'text-green-400' },
+    { label: '3ª Banda Inf. (Compra)', value: vwapBands.band3.lower, color: 'text-green-400' },
+    { label: '4ª Banda Inf. (Compra)', value: vwapBands.band4.lower, color: 'text-green-400' },
+    { label: '5ª Banda Inf. (Compra)', value: vwapBands.band5.lower, color: 'text-green-400' },
+  ].sort((a, b) => b.value - a.value);
+  
+  const weeklyVwapBandLevels = [
+    { label: '5ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band5.upper, color: 'text-red-400' },
+    { label: '4ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band4.upper, color: 'text-red-400' },
+    { label: '3ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band3.upper, color: 'text-red-400' },
+    { label: '2ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band2.upper, color: 'text-red-400' },
+    { label: '1ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band1.upper, color: 'text-red-400' },
+    { label: '1ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band1.lower, color: 'text-green-400' },
+    { label: '2ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band2.lower, color: 'text-green-400' },
+    { label: '3ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band3.lower, color: 'text-green-400' },
+    { label: '4ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band4.lower, color: 'text-green-400' },
+    { label: '5ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band5.lower, color: 'text-green-400' },
+  ].sort((a, b) => b.value - a.value);
 
-  const allLevels = [...pivotLevels, ...fiboRetracementLevels, ...fiboExtensionLevels];
+  const allLevels = [...pivotLevels, ...fiboRetracementLevels, ...fiboExtensionLevels, ...vwapBandLevels, ...weeklyVwapBandLevels];
   
   const min = Math.min(...allLevels.map(l => l.value));
   const max = Math.max(...allLevels.map(l => l.value));
@@ -101,7 +135,7 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
-      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave de Preço (Diário)</h3>
+      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave de Preço</h3>
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
         <div className="w-full lg:w-1/2 flex-shrink-0">
           <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points</h4>
@@ -110,6 +144,10 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
           {renderLevelList(fiboRetracementLevels)}
           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci</h4>
           {renderLevelList(fiboExtensionLevels)}
+          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Bandas VWAP (Diário)</h4>
+          {renderLevelList(vwapBandLevels)}
+           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Bandas VWAP (Semanal)</h4>
+          {renderLevelList(weeklyVwapBandLevels)}
         </div>
         <div className="w-full lg:w-1/2 flex items-center justify-center mt-8 lg:mt-0 px-4 py-8">
           <div className="relative h-4 w-full bg-gray-700 rounded-full">
@@ -185,15 +223,18 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const App: React.FC = () => {
     const [signal, setSignal] = useState<Signal | null>(null);
     const [pivots, setPivots] = useState<PivotPoints | null>(null);
+    const [vwapBands, setVwapBands] = useState<VwapBands | null>(null);
+    const [weeklyVwapBands, setWeeklyVwapBands] = useState<VwapBands | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchPriceAndGenerateSignal = async () => {
             try {
+                // Fetch more daily klines for std deviation calculation
                 const [priceResponse, dailyKlineResponse, weeklyKlineResponse, monthlyKlineResponse] = await Promise.all([
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=2'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=2'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=2'),
                 ]);
 
@@ -211,7 +252,7 @@ const App: React.FC = () => {
                     throw new Error('Formato de preço inválido recebido da API.');
                 }
                 
-                const yesterdayKline = dailyKlineData[0];
+                const yesterdayKline = dailyKlineData[dailyKlineData.length - 2];
                 const high = parseFloat(yesterdayKline[2]);
                 const low = parseFloat(yesterdayKline[3]);
                 const close = parseFloat(yesterdayKline[4]);
@@ -222,24 +263,67 @@ const App: React.FC = () => {
 
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
                 setPivots(calculatedPivots);
+                
+                const calculateVwapAndBands = (klines: any[]): { vwap: number, bands: VwapBands } => {
+                    if (klines.length < 2) throw new Error('Dados de kline insuficientes para calcular Bandas VWAP');
+
+                    let cumulativeTPV = 0;
+                    let cumulativeVolume = 0;
+                    const pricesForStdDev: number[] = [];
+
+                    for (const kline of klines) {
+                        const h = parseFloat(kline[2]);
+                        const l = parseFloat(kline[3]);
+                        const c = parseFloat(kline[4]);
+                        const volume = parseFloat(kline[5]);
+                        const typicalPrice = (h + l + c) / 3;
+
+                        cumulativeTPV += typicalPrice * volume;
+                        cumulativeVolume += volume;
+                        pricesForStdDev.push(typicalPrice);
+                    }
+
+                    const vwap = cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
+
+                    const mean = pricesForStdDev.reduce((a, b) => a + b, 0) / pricesForStdDev.length;
+                    const squaredDiffs = pricesForStdDev.map(price => Math.pow(price - mean, 2));
+                    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
+                    const stdDev = Math.sqrt(avgSquaredDiff);
+
+                    const bands: VwapBands = {
+                        band1: { upper: vwap + (stdDev * 1), lower: vwap - (stdDev * 1) },
+                        band2: { upper: vwap + (stdDev * 2), lower: vwap - (stdDev * 2) },
+                        band3: { upper: vwap + (stdDev * 3), lower: vwap - (stdDev * 3) },
+                        band4: { upper: vwap + (stdDev * 4), lower: vwap - (stdDev * 4) },
+                        band5: { upper: vwap + (stdDev * 5), lower: vwap - (stdDev * 5) },
+                    };
+
+                    return { vwap, bands };
+                };
+                
+                const { vwap: dailyVwap, bands: calculatedBands } = calculateVwapAndBands(dailyKlineData);
+                setVwapBands(calculatedBands);
+
+                const { vwap: weeklyVwap, bands: calculatedWeeklyBands } = calculateVwapAndBands(weeklyKlineData);
+                setWeeklyVwapBands(calculatedWeeklyBands);
 
                 const calculateVwapFromKline = (kline: any[]): number => {
                     const h = parseFloat(kline[2]);
                     const l = parseFloat(kline[3]);
                     const c = parseFloat(kline[4]);
                     if (isNaN(h) || isNaN(l) || isNaN(c)) {
-                        throw new Error('Formato de kline inválido para cálculo de VWAP.');
+                        return 0; // Return 0 or handle error appropriately
                     }
                     return (h + l + c) / 3;
                 };
 
                 const vwap = {
-                    daily: calculateVwapFromKline(dailyKlineData[0]),
-                    weekly: calculateVwapFromKline(weeklyKlineData[0]),
-                    monthly: calculateVwapFromKline(monthlyKlineData[0]),
+                    daily: dailyVwap,
+                    weekly: weeklyVwap,
+                    monthly: calculateVwapFromKline(monthlyKlineData.length > 1 ? monthlyKlineData[0] : []),
                 };
 
-                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap));
+                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands));
                 if (error) setError(null);
             } catch (err) {
                 console.error("Falha ao buscar dados ou gerar sinal:", err);
@@ -278,7 +362,7 @@ const App: React.FC = () => {
                         ) : (
                             <>
                                 <SignalCard signal={signal} />
-                                <PivotPointsCard pivots={pivots} signal={signal} />
+                                <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />
                             </>
                         )}
                      </div>

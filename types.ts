@@ -1,3 +1,5 @@
+// FIX: Removed a circular self-import of `SignalAction` which was causing a declaration conflict.
+
 export enum SignalAction {
   BUY = 'Compra',
   SELL = 'Venda',
@@ -34,6 +36,19 @@ export interface Plan {
   priceDetails: string;
   features: string[];
   isPopular?: boolean;
+}
+
+export interface VwapBandLevel {
+  upper: number;
+  lower: number;
+}
+
+export interface VwapBands {
+  band1: VwapBandLevel;
+  band2: VwapBandLevel;
+  band3: VwapBandLevel;
+  band4: VwapBandLevel;
+  band5: VwapBandLevel;
 }
 
 export interface PivotPoints {
