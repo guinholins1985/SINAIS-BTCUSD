@@ -1,18 +1,57 @@
-import { SignalAction, type Signal } from '../types';
+import { SignalAction, type Signal, type PivotPoints } from '../types';
+
+// --- Pivot Point Calculation ---
+export const calculateClassicPivotPoints = (high: number, low: number, close: number): PivotPoints => {
+  const p = (high + low + close) / 3;
+  const range = high - low;
+
+  // Classic Pivots
+  const r1 = (p * 2) - low;
+  const s1 = (p * 2) - high;
+  const r2 = p + range;
+  const s2 = p - range;
+  const r3 = high + 2 * (p - low);
+  const s3 = low - 2 * (high - p);
+  
+  // Fibonacci Retracements
+  const fiboRetBuy50 = high - (range * 0.5);
+  const fiboRetBuy61 = high - (range * 0.618);
+  const fiboRetBuy100 = high - (range * 1.0);
+  const fiboRetBuy200 = high - (range * 2.0);
+  const fiboRetSell50 = low + (range * 0.5);
+  const fiboRetSell61 = low + (range * 0.618);
+  const fiboRetSell100 = low + (range * 1.0);
+  const fiboRetSell200 = low + (range * 2.0);
+
+  // Fibonacci Extensions
+  const fiboExtBuy100 = high + range;
+  const fiboExtBuy200 = high + (range * 2);
+  const fiboExtSell100 = low - range;
+  const fiboExtSell200 = low - (range * 2);
+
+  return { 
+    p, r1, s1, r2, s2, r3, s3,
+    fiboRetBuy50, fiboRetBuy61, fiboRetBuy100, fiboRetBuy200,
+    fiboRetSell50, fiboRetSell61, fiboRetSell100, fiboRetSell200,
+    fiboExtBuy100, fiboExtBuy200, fiboExtSell100, fiboExtSell200
+  };
+};
 
 // --- Static Data ---
 const buyReasons = [
-  "RSI < 20 (sobrevendido)",
-  "Preço toca a 5ª banda inferior do VWAP semanal",
-  "Preço está acima da MM80",
-  "Preço está acima do VWAP semanal",
+  "RSI < 20 indicando sobrevenda",
+  "Preço próximo ao suporte S3 de Pivot Point",
+  "Suporte encontrado na retração de Fibonacci (100%)",
+  "Preço testando a 5ª banda inferior do VWAP semanal",
+  "Confluência de VWAP Semanal com a Média Móvel de 80 períodos",
 ];
 
 const sellReasons = [
-  "RSI > 90 (sobrecomprado)",
-  "Preço toca a 5ª banda superior do VWAP semanal",
-  "Preço está abaixo da MM80",
-  "Preço está abaixo do VWAP semanal",
+  "RSI > 90 indicando sobrecompra",
+  "Preço próximo à resistência R3 de Pivot Point",
+  "Resistência na retração de Fibonacci (100%)",
+  "Alvo potencial na extensão de Fibonacci (200%)",
+  "Preço testando a 5ª banda superior do VWAP semanal",
 ];
 
 const holdReasons = [

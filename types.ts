@@ -34,3 +34,27 @@ export interface Plan {
   features: string[];
   isPopular?: boolean;
 }
+
+export interface PivotPoints {
+  p: number;
+  r1: number;
+  s1: number;
+  r2: number;
+  s2: number;
+  r3: number;
+  s3: number;
+  // Retracements
+  fiboRetBuy50: number;
+  fiboRetBuy61: number;
+  fiboRetBuy100: number;
+  fiboRetBuy200: number;
+  fiboRetSell50: number;
+  fiboRetSell61: number;
+  fiboRetSell100: number;
+  fiboRetSell200: number;
+  // Extensions
+  fiboExtBuy100: number;
+  fiboExtBuy200: number;
+  fiboExtSell100: number;
+  fiboExtSell200: number;
+}
