@@ -39,18 +39,37 @@ export const calculateClassicPivotPoints = (high: number, low: number, close: nu
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number; monthly: number; }, action: SignalAction): string[] => {
+    const reasons: string[] = [];
+    const proximityThreshold = 0.01; // 1% proximity
+
+    const vwapLevels = [
+        { label: 'Diária', value: vwapData.daily },
+        { label: 'Semanal', value: vwapData.weekly },
+        { label: 'Mensal', value: vwapData.monthly },
+    ];
+
+    if (action === SignalAction.HOLD) return [];
+
+    const actionText = action === SignalAction.BUY ? 'suporte' : 'resistência';
+
+    for (const level of vwapLevels) {
+        const distance = Math.abs(price - level.value) / level.value;
+        if (distance < proximityThreshold) {
+            reasons.push(`Preço testando ${actionText} na VWAP ${level.label} (${formattedPrice(level.value)})`);
+        }
+    }
+    return reasons;
+};
+
 
 // --- Static Data ---
 const baseBuyReasons = [
   "RSI < 20 indicando sobrevenda",
-  "Preço testando a 5ª banda inferior do VWAP semanal",
-  "Confluência de VWAP Semanal com a Média Móvel de 80 períodos",
 ];
 
 const baseSellReasons = [
   "RSI > 90 indicando sobrecompra",
-  "Preço testando a 5ª banda superior do VWAP semanal",
-  "Alvo potencial na extensão de Fibonacci (200%)",
 ];
 
 const holdReasons = [
@@ -81,12 +100,17 @@ const findClosestLevel = (price: number, levels: { label: string; value: number 
 
 
 /**
- * Updates the internal signal state and generates a new signal object based on the provided live price and pivot points.
+ * Updates the internal signal state and generates a new signal object based on the provided live price, pivot points and VWAP levels.
  * @param currentPrice The live price of BTC/USD.
  * @param pivots The calculated pivot points and fibonacci levels.
+ * @param vwap The calculated VWAP levels for daily, weekly, and monthly timeframes.
  * @returns A new Signal object.
  */
-export const updateAndGenerateSignal = (currentPrice: number, pivots: PivotPoints): Signal => {
+export const updateAndGenerateSignal = (
+  currentPrice: number, 
+  pivots: PivotPoints,
+  vwap: { daily: number; weekly: number; monthly: number; }
+): Signal => {
   if (signalDuration <= 0) {
     const lastAction = currentSignalAction;
     
@@ -103,6 +127,8 @@ export const updateAndGenerateSignal = (currentPrice: number, pivots: PivotPoint
   let reasons: string[];
   let entryRange;
   let triggerLevel: { label: string; value: number } | undefined = undefined;
+  
+  const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
 
   switch (currentSignalAction) {
     case SignalAction.BUY:
@@ -114,7 +140,7 @@ export const updateAndGenerateSignal = (currentPrice: number, pivots: PivotPoint
       ];
       const closestSupport = findClosestLevel(currentPrice, supportLevels, 'support');
       
-      reasons = [...baseBuyReasons];
+      reasons = [...baseBuyReasons, ...vwapReasons];
       if (closestSupport) {
         reasons.unshift(`Preço próximo ao ${closestSupport.label} (${formattedPrice(closestSupport.value)})`);
         triggerLevel = closestSupport;
@@ -132,7 +158,7 @@ export const updateAndGenerateSignal = (currentPrice: number, pivots: PivotPoint
       ];
        const closestResistance = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
 
-      reasons = [...baseSellReasons];
+      reasons = [...baseSellReasons, ...vwapReasons];
       if (closestResistance) {
         reasons.unshift(`Preço próximo à ${closestResistance.label} (${formattedPrice(closestResistance.value)})`);
         triggerLevel = closestResistance;

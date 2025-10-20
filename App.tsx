@@ -190,39 +190,56 @@ const App: React.FC = () => {
     useEffect(() => {
         const fetchPriceAndGenerateSignal = async () => {
             try {
-                const [priceResponse, klineResponse] = await Promise.all([
+                const [priceResponse, dailyKlineResponse, weeklyKlineResponse, monthlyKlineResponse] = await Promise.all([
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=2')
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=2'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=2'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=2'),
                 ]);
 
-                if (!priceResponse.ok) {
-                    throw new Error(`Erro ao buscar preço: ${priceResponse.statusText}`);
+                if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok) {
+                    throw new Error(`Erro ao buscar dados da API da Binance. Verifique a conexão e os endpoints.`);
                 }
-                if (!klineResponse.ok) {
-                    throw new Error(`Erro ao buscar klines: ${klineResponse.statusText}`);
-                }
-
+                
                 const priceData = await priceResponse.json();
-                const klineData = await klineResponse.json();
+                const dailyKlineData = await dailyKlineResponse.json();
+                const weeklyKlineData = await weeklyKlineResponse.json();
+                const monthlyKlineData = await monthlyKlineResponse.json();
                 
                 const currentPrice = parseFloat(priceData.price);
                 if (isNaN(currentPrice)) {
                     throw new Error('Formato de preço inválido recebido da API.');
                 }
                 
-                const yesterdayKline = klineData[0];
+                const yesterdayKline = dailyKlineData[0];
                 const high = parseFloat(yesterdayKline[2]);
                 const low = parseFloat(yesterdayKline[3]);
                 const close = parseFloat(yesterdayKline[4]);
 
                 if (isNaN(high) || isNaN(low) || isNaN(close)) {
-                    throw new Error('Formato de kline inválido recebido da API.');
+                    throw new Error('Formato de kline diário inválido recebido da API.');
                 }
 
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
                 setPivots(calculatedPivots);
 
-                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots));
+                const calculateVwapFromKline = (kline: any[]): number => {
+                    const h = parseFloat(kline[2]);
+                    const l = parseFloat(kline[3]);
+                    const c = parseFloat(kline[4]);
+                    if (isNaN(h) || isNaN(l) || isNaN(c)) {
+                        throw new Error('Formato de kline inválido para cálculo de VWAP.');
+                    }
+                    return (h + l + c) / 3;
+                };
+
+                const vwap = {
+                    daily: calculateVwapFromKline(dailyKlineData[0]),
+                    weekly: calculateVwapFromKline(weeklyKlineData[0]),
+                    monthly: calculateVwapFromKline(monthlyKlineData[0]),
+                };
+
+                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap));
                 if (error) setError(null);
             } catch (err) {
                 console.error("Falha ao buscar dados ou gerar sinal:", err);
