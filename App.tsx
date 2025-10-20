@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SignalAction, type Signal, type PivotPoints } from './types';
 import { SignalCard } from './components/SignalCard';
@@ -72,27 +73,30 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
 
   const getPosition = (value: number) => {
     if (range === 0) return 50;
-    const position = ((max - value) / range) * 100;
+    const position = ((value - min) / range) * 100;
     return Math.max(0, Math.min(100, position));
   };
 
   const currentPricePosition = getPosition(currentPrice);
 
-  // --- New Logic for Entry Range Visualization ---
   const entryRangeMinPosition = getPosition(signal.entryRange.min);
   const entryRangeMaxPosition = getPosition(signal.entryRange.max);
-  const rangeHeight = entryRangeMinPosition - entryRangeMaxPosition;
-  const rangeTop = entryRangeMaxPosition;
+  const rangeLeft = entryRangeMinPosition;
+  const rangeWidth = entryRangeMaxPosition - entryRangeMinPosition;
   
   const isBuySignal = signal.action === SignalAction.BUY;
-  const rangeColorClasses = isBuySignal ? 'bg-green-500/20 border-green-500' : 'bg-red-500/20 border-red-500';
+  const rangeGradientClasses = isBuySignal 
+    ? 'bg-gradient-to-r from-green-500/25 to-green-500/5' 
+    : 'bg-gradient-to-r from-red-500/25 to-red-500/5';
+  const rangeBorderClasses = isBuySignal ? 'bg-green-500' : 'bg-red-500';
   const rangeTextColor = isBuySignal ? 'text-green-300' : 'text-red-300';
+  const rangeLabelBorder = isBuySignal ? 'border-green-500/30' : 'border-red-500/30';
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
       <h3 className="text-xl font-bold text-white mb-4">Níveis Chave de Preço (Diário)</h3>
-      <div className="flex gap-6">
-        <div className="w-1/2 flex-shrink-0">
+      <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
+        <div className="w-full lg:w-1/2 flex-shrink-0">
           <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points</h4>
           {pivotLevels.map(level => (
             <PivotLevel key={level.label} {...level} />
@@ -106,47 +110,53 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
              <PivotLevel key={level.label} {...level} />
           ))}
         </div>
-        <div className="w-1/2 flex items-center justify-center">
-          <div className="relative w-4 h-72 bg-gray-700 rounded-full">
+        <div className="w-full lg:w-1/2 flex items-center justify-center mt-8 lg:mt-0 px-4 py-8">
+          <div className="relative h-4 w-full bg-gray-700 rounded-full">
             {allLevels.map(level => (
               <div
                 key={level.label}
-                className="absolute w-6 h-px bg-gray-500"
-                style={{ top: `${getPosition(level.value)}%`, left: '-4px' }}
+                className="absolute h-6 w-px bg-gray-500"
+                style={{ left: `${getPosition(level.value)}%`, top: '-4px' }}
                 title={`${level.label}: ${formattedPrice(level.value)}`}
               />
             ))}
             
-            {signal.action !== SignalAction.HOLD && rangeHeight > 0.1 && (
-                <div
-                    className={`absolute w-full ${rangeColorClasses}`}
-                    style={{
-                        top: `${rangeTop}%`,
-                        height: `${rangeHeight}%`,
-                        borderLeftWidth: '2px',
-                    }}
-                    title={`Faixa de ${signal.action}: ${formattedPrice(signal.entryRange.min)} - ${formattedPrice(signal.entryRange.max)}`}
+            {signal.action !== SignalAction.HOLD && rangeWidth > 0.1 && (
+              <div
+                className="absolute h-full"
+                style={{ left: `${rangeLeft}%`, width: `${rangeWidth}%` }}
+                title={`Faixa de ${signal.action}: ${formattedPrice(signal.entryRange.min)} - ${formattedPrice(signal.entryRange.max)}`}
+              >
+                <div className={`absolute inset-0 ${rangeGradientClasses}`}></div>
+                <div className={`absolute left-0 right-0 top-0 h-px ${rangeBorderClasses} opacity-60`}></div>
+                <div className={`absolute left-0 right-0 bottom-0 h-px ${rangeBorderClasses} opacity-60`}></div>
+
+                <div 
+                  className={`absolute top-full mt-4 left-1/2 -translate-x-1/2 w-max p-2 rounded-md border ${rangeLabelBorder} bg-gray-900/60 backdrop-blur-sm shadow-xl`}
                 >
-                    <div className="absolute right-8 top-1/2 -translate-y-1/2 w-32 text-right">
-                        <p className={`text-xs font-semibold ${rangeTextColor}`}>
-                          {isBuySignal ? 'Faixa de Compra' : 'Faixa de Venda'}
-                        </p>
-                        <p className={`text-xs font-mono -mt-1 ${rangeTextColor}`}>
-                          {formattedPrice(signal.entryRange.max)}
-                        </p>
-                        <p className={`text-xs font-mono ${rangeTextColor}`}>
-                          {formattedPrice(signal.entryRange.min)}
-                        </p>
-                    </div>
+                  <p className={`text-xs font-semibold ${rangeTextColor} mb-1 text-center uppercase tracking-wider`}>
+                    {isBuySignal ? 'Zona de Compra' : 'Zona de Venda'}
+                  </p>
+                  <div className="flex justify-between items-baseline gap-2">
+                    <span className="text-xs font-mono font-bold text-white">{formattedPrice(signal.entryRange.min)}</span>
+                    <span className="text-gray-500 text-xs">a</span>
+                    <span className="text-xs font-mono font-bold text-white">{formattedPrice(signal.entryRange.max)}</span>
+                  </div>
                 </div>
+                
+                <div 
+                  className="absolute h-4 w-px top-full left-1/2 -translate-x-1/2"
+                  style={{ background: isBuySignal ? 'rgba(74, 222, 128, 0.4)' : 'rgba(248, 113, 113, 0.4)'}}
+                ></div>
+              </div>
             )}
             
             <div
-              className="absolute w-full h-1 bg-cyan-400 rounded-full shadow-lg shadow-cyan-500/50 z-10"
-              style={{ top: `calc(${currentPricePosition}% - 2px)` }}
+              className="absolute h-full w-1 bg-cyan-400 rounded-full shadow-lg shadow-cyan-500/50 z-10"
+              style={{ left: `calc(${currentPricePosition}% - 2px)` }}
               title={`Preço Atual: ${formattedPrice(currentPrice)}`}
             >
-               <div className="absolute left-6 top-1/2 -translate-y-1/2 bg-gray-900 px-2 py-0.5 rounded border border-cyan-400">
+               <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-gray-900 px-2 py-0.5 rounded border border-cyan-400">
                  <span className="text-cyan-400 text-xs font-bold font-mono whitespace-nowrap">{formattedPrice(currentPrice)}</span>
               </div>
             </div>
@@ -162,7 +172,7 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <section className="py-12 md:py-16">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-10 text-white">{title}</h2>
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-10 text-white">{title}</h2>
         {children}
     </section>
 );
@@ -229,10 +239,10 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-900 bg-gradient-to-br from-gray-900 via-gray-900 to-slate-800 text-gray-200">
             <header className="py-6 text-center border-b border-gray-800">
-                <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl md:text-3xl text-gray-400 font-medium">(Análise H1)</span>
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">
+                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl sm:text-3xl lg:text-3xl text-gray-400 font-medium">(Análise H1)</span>
                 </h1>
-                <p className="text-gray-400 mt-2">Sinais de trading para BTC/USD baseados em confluência de indicadores.</p>
+                <p className="text-gray-400 mt-2 text-sm sm:text-base">Sinais de trading para BTC/USD baseados em confluência de indicadores.</p>
             </header>
 
             <main className="container mx-auto px-4">

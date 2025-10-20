@@ -12,19 +12,19 @@ const getSignalStyles = (action: SignalAction | undefined) => {
       return {
         bg: 'bg-green-900/50 border-green-500',
         text: 'text-green-400',
-        icon: <ArrowTrendingUpIcon className="h-12 w-12" />,
+        icon: <ArrowTrendingUpIcon className="h-10 w-10 sm:h-12 sm:w-12" />,
       };
     case SignalAction.SELL:
       return {
         bg: 'bg-red-900/50 border-red-500',
         text: 'text-red-400',
-        icon: <ArrowTrendingDownIcon className="h-12 w-12" />,
+        icon: <ArrowTrendingDownIcon className="h-10 w-10 sm:h-12 sm:w-12" />,
       };
     default:
       return {
         bg: 'bg-gray-700/50 border-gray-500',
         text: 'text-gray-400',
-        icon: <PauseIcon className="h-12 w-12" />,
+        icon: <PauseIcon className="h-10 w-10 sm:h-12 sm:w-12" />,
       };
   }
 };
@@ -68,7 +68,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
       <div className="p-6">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className={`text-4xl font-bold ${styles.text}`}>{signal.action.toUpperCase()}</h3>
+            <h3 className={`text-3xl sm:text-4xl font-bold ${styles.text}`}>{signal.action.toUpperCase()}</h3>
             <p className="text-gray-400 text-sm">
               {signal.timestamp.toLocaleTimeString('pt-BR')} - BTC/USD
             </p>
@@ -78,23 +78,23 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
 
         <div className="mt-6 text-center">
             <p className="text-sm text-gray-400">Preço Atual (BTC/USD)</p>
-            <p className="text-4xl font-bold text-white">{formattedPrice(signal.currentPrice)}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-white">{formattedPrice(signal.currentPrice)}</p>
         </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
           <div>
             <p className={`text-sm font-semibold ${entryDetails.color}`}>{entryDetails.label}</p>
-            <p className={`text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.min)}`}</p>
+            <p className={`text-lg sm:text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.min)}`}</p>
              <p className={`text-sm font-semibold ${entryDetails.color}/80`}>a</p>
-             <p className={`text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.max)}`}</p>
+             <p className={`text-lg sm:text-xl font-semibold ${entryDetails.color}`}>{`${formattedPrice(signal.entryRange.max)}`}</p>
           </div>
           <div>
             <p className="text-sm text-red-400">Stop Loss</p>
-            <p className="text-2xl font-semibold text-red-400">{formattedPrice(signal.stopLoss)}</p>
+            <p className="text-xl sm:text-2xl font-semibold text-red-400">{formattedPrice(signal.stopLoss)}</p>
           </div>
           <div>
             <p className="text-sm text-green-400">Take Profit</p>
-            <p className="text-2xl font-semibold text-green-400">{formattedPrice(signal.takeProfit)}</p>
+            <p className="text-xl sm:text-2xl font-semibold text-green-400">{formattedPrice(signal.takeProfit)}</p>
           </div>
         </div>
       </div>
