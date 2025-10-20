@@ -8,10 +8,10 @@ import { updateAndGenerateSignal, calculateClassicPivotPoints } from './services
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const PivotLevel: React.FC<{ label: string, value: number, color: string }> = ({ label, value, color }) => (
-  <div className="flex justify-between items-center py-1 text-sm">
-    <span className={`font-semibold ${color}`}>{label}</span>
-    <span className="font-mono text-gray-300">{formattedPrice(value)}</span>
+const PivotLevel: React.FC<{ label: string, value: number, color: string, isHighlighted?: boolean }> = ({ label, value, color, isHighlighted }) => (
+  <div className={`flex justify-between items-center py-1 text-sm rounded px-2 ${isHighlighted ? 'bg-cyan-500/10' : ''}`}>
+    <span className={`font-semibold ${isHighlighted ? 'text-cyan-300 font-bold' : color}`}>{label}</span>
+    <span className={`font-mono ${isHighlighted ? 'text-cyan-300 font-bold' : 'text-gray-300'}`}>{formattedPrice(value)}</span>
   </div>
 );
 
@@ -76,6 +76,13 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
     const position = ((value - min) / range) * 100;
     return Math.max(0, Math.min(100, position));
   };
+  
+  const renderLevelList = (levels: {label: string, value: number, color: string}[]) => {
+      return levels.map(level => {
+          const isTrigger = signal.triggerLevel?.label === level.label;
+          return <PivotLevel key={level.label} {...level} isHighlighted={isTrigger} />;
+      });
+  };
 
   const currentPricePosition = getPosition(currentPrice);
 
@@ -98,28 +105,25 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal }) => 
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
         <div className="w-full lg:w-1/2 flex-shrink-0">
           <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points</h4>
-          {pivotLevels.map(level => (
-            <PivotLevel key={level.label} {...level} />
-          ))}
+          {renderLevelList(pivotLevels)}
            <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci</h4>
-          {fiboRetracementLevels.map(level => (
-             <PivotLevel key={level.label} {...level} />
-          ))}
+          {renderLevelList(fiboRetracementLevels)}
           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci</h4>
-          {fiboExtensionLevels.map(level => (
-             <PivotLevel key={level.label} {...level} />
-          ))}
+          {renderLevelList(fiboExtensionLevels)}
         </div>
         <div className="w-full lg:w-1/2 flex items-center justify-center mt-8 lg:mt-0 px-4 py-8">
           <div className="relative h-4 w-full bg-gray-700 rounded-full">
-            {allLevels.map(level => (
-              <div
-                key={level.label}
-                className="absolute h-6 w-px bg-gray-500"
-                style={{ left: `${getPosition(level.value)}%`, top: '-4px' }}
-                title={`${level.label}: ${formattedPrice(level.value)}`}
-              />
-            ))}
+            {allLevels.map(level => {
+              const isTrigger = signal.triggerLevel?.label === level.label;
+              return (
+                 <div
+                    key={level.label}
+                    className={`absolute ${isTrigger ? 'h-8 w-0.5 bg-cyan-400 shadow-lg shadow-cyan-500/50' : 'h-6 w-px bg-gray-500'}`}
+                    style={{ left: `${getPosition(level.value)}%`, top: isTrigger ? '-8px' : '-4px' }}
+                    title={`${level.label}: ${formattedPrice(level.value)}`}
+                  />
+              );
+            })}
             
             {signal.action !== SignalAction.HOLD && rangeWidth > 0.1 && (
               <div
@@ -218,7 +222,7 @@ const App: React.FC = () => {
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
                 setPivots(calculatedPivots);
 
-                setSignal(updateAndGenerateSignal(currentPrice));
+                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots));
                 if (error) setError(null);
             } catch (err) {
                 console.error("Falha ao buscar dados ou gerar sinal:", err);

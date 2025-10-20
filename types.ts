@@ -12,6 +12,7 @@ export interface Signal {
   reasons: string[];
   stopLoss: number;
   takeProfit: number;
+  triggerLevel?: { label: string; value: number; };
 }
 
 export interface BacktestEntry {

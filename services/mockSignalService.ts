@@ -37,21 +37,20 @@ export const calculateClassicPivotPoints = (high: number, low: number, close: nu
   };
 };
 
+const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+
 // --- Static Data ---
-const buyReasons = [
+const baseBuyReasons = [
   "RSI < 20 indicando sobrevenda",
-  "Preço próximo ao suporte S3 de Pivot Point",
-  "Suporte encontrado na retração de Fibonacci (100%)",
   "Preço testando a 5ª banda inferior do VWAP semanal",
   "Confluência de VWAP Semanal com a Média Móvel de 80 períodos",
 ];
 
-const sellReasons = [
+const baseSellReasons = [
   "RSI > 90 indicando sobrecompra",
-  "Preço próximo à resistência R3 de Pivot Point",
-  "Resistência na retração de Fibonacci (100%)",
-  "Alvo potencial na extensão de Fibonacci (200%)",
   "Preço testando a 5ª banda superior do VWAP semanal",
+  "Alvo potencial na extensão de Fibonacci (200%)",
 ];
 
 const holdReasons = [
@@ -62,46 +61,86 @@ const holdReasons = [
 ];
 
 // --- Signal State ---
-// This state persists across calls to simulate a continuous signal logic
 let currentSignalAction = SignalAction.HOLD;
-let signalDuration = 0; // Ticks (calls) until next signal change
+let signalDuration = 0; 
 
 const getRandomDuration = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
+
+const findClosestLevel = (price: number, levels: { label: string; value: number }[], type: 'support' | 'resistance') => {
+  if (!levels || levels.length === 0) return null;
+
+  return levels
+    .map(level => ({
+      ...level,
+      distance: type === 'support' ? price - level.value : level.value - price
+    }))
+    .filter(level => level.distance >= 0) // Only consider levels that have been "touched" or "passed"
+    .sort((a, b) => a.distance - b.distance)[0]; // Find the one with the smallest distance
+};
+
+
 /**
- * Updates the internal signal state and generates a new signal object based on the provided live price.
+ * Updates the internal signal state and generates a new signal object based on the provided live price and pivot points.
  * @param currentPrice The live price of BTC/USD.
+ * @param pivots The calculated pivot points and fibonacci levels.
  * @returns A new Signal object.
  */
-export const updateAndGenerateSignal = (currentPrice: number): Signal => {
-  // Decrease duration and decide if it's time for a new signal
+export const updateAndGenerateSignal = (currentPrice: number, pivots: PivotPoints): Signal => {
   if (signalDuration <= 0) {
     const lastAction = currentSignalAction;
     
-    // Logic to enforce a HOLD period between BUY and SELL signals
     if (lastAction === SignalAction.BUY || lastAction === SignalAction.SELL) {
         currentSignalAction = SignalAction.HOLD;
-        signalDuration = getRandomDuration(10, 20); // Hold for 10-20 update cycles
-    } else { // If we were holding, pick a new trade direction
+        signalDuration = getRandomDuration(10, 20); 
+    } else { 
         const rand = Math.random();
         currentSignalAction = rand > 0.5 ? SignalAction.BUY : SignalAction.SELL;
-        signalDuration = getRandomDuration(30, 60); // New signal lasts for 30-60 update cycles
+        signalDuration = getRandomDuration(30, 60); 
     }
   }
 
   let reasons: string[];
   let entryRange;
+  let triggerLevel: { label: string; value: number } | undefined = undefined;
 
   switch (currentSignalAction) {
     case SignalAction.BUY:
-      reasons = buyReasons;
-      // Entry range is now calculated based on the live price
+      const supportLevels = [
+        { label: 'S1', value: pivots.s1 }, { label: 'S2', value: pivots.s2 }, { label: 'S3', value: pivots.s3 },
+        { label: 'Ret. Compra 50%', value: pivots.fiboRetBuy50 },
+        { label: 'Ret. Compra 61.8%', value: pivots.fiboRetBuy61 },
+        { label: 'Ret. Compra 100%', value: pivots.fiboRetBuy100 },
+      ];
+      const closestSupport = findClosestLevel(currentPrice, supportLevels, 'support');
+      
+      reasons = [...baseBuyReasons];
+      if (closestSupport) {
+        reasons.unshift(`Preço próximo ao ${closestSupport.label} (${formattedPrice(closestSupport.value)})`);
+        triggerLevel = closestSupport;
+      }
+      
       entryRange = { min: currentPrice * 0.998, max: currentPrice * 1.001 };
       break;
+
     case SignalAction.SELL:
-      reasons = sellReasons;
+      const resistanceLevels = [
+        { label: 'R1', value: pivots.r1 }, { label: 'R2', value: pivots.r2 }, { label: 'R3', value: pivots.r3 },
+        { label: 'Ret. Venda 50%', value: pivots.fiboRetSell50 },
+        { label: 'Ret. Venda 61.8%', value: pivots.fiboRetSell61 },
+        { label: 'Ret. Venda 100%', value: pivots.fiboRetSell100 },
+      ];
+       const closestResistance = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
+
+      reasons = [...baseSellReasons];
+      if (closestResistance) {
+        reasons.unshift(`Preço próximo à ${closestResistance.label} (${formattedPrice(closestResistance.value)})`);
+        triggerLevel = closestResistance;
+      }
+
       entryRange = { min: currentPrice * 0.999, max: currentPrice * 1.002 };
       break;
+
     default: // HOLD
       reasons = holdReasons;
       entryRange = { min: currentPrice, max: currentPrice };
@@ -121,5 +160,6 @@ export const updateAndGenerateSignal = (currentPrice: number): Signal => {
     stopLoss,
     takeProfit,
     entryRange,
+    triggerLevel,
   };
 };
