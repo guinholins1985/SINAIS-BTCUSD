@@ -1,25 +1,63 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { SignalAction, type Signal, type PivotPoints, type VwapBands } from './types';
 import { SignalCard } from './components/SignalCard';
+import { PendingOrdersCard } from './components/PendingOrdersCard';
+import { CentAccountCalculatorCard } from './components/CentAccountCalculatorCard';
 import { updateAndGenerateSignal, calculateClassicPivotPoints } from './services/mockSignalService';
 
 // --- PivotPointsCard Component and Helpers ---
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const PivotLevel: React.FC<{ label: string, value: number, color: string, isHighlighted?: boolean }> = ({ label, value, color, isHighlighted }) => (
-  <div className={`flex justify-between items-center py-1 text-sm rounded px-2 ${isHighlighted ? 'bg-cyan-500/10' : ''}`}>
-    <div className="flex items-center gap-2">
-      <span className={`font-semibold ${isHighlighted ? 'text-cyan-300 font-bold' : color}`}>{label}</span>
-      {isHighlighted && (
-        <span className="text-xs bg-cyan-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">
-          GATILHO
-        </span>
-      )}
-    </div>
-    <span className={`font-mono ${isHighlighted ? 'text-cyan-300 font-bold' : 'text-gray-300'}`}>{formattedPrice(value)}</span>
-  </div>
-);
+const PivotLevel: React.FC<{ 
+    label: string, 
+    value: number, 
+    color: string, 
+    highlight?: 'trigger' | 'touched' | 'target'
+}> = ({ label, value, color, highlight }) => {
+    
+    const highlightStyles = {
+        trigger: {
+            wrapper: 'bg-cyan-500/10',
+            label: 'text-cyan-300 font-bold',
+            value: 'text-cyan-300 font-bold',
+            badgeText: 'GATILHO',
+            badgeClasses: 'bg-cyan-500 text-gray-900',
+        },
+        touched: {
+            wrapper: 'bg-yellow-500/10',
+            label: 'text-yellow-300 font-bold',
+            value: 'text-yellow-300 font-bold',
+            badgeText: 'TOCOU',
+            badgeClasses: 'bg-yellow-500 text-gray-900',
+        },
+        target: {
+            wrapper: 'bg-purple-500/10',
+            label: 'text-purple-300 font-bold',
+            value: 'text-purple-300 font-bold',
+            badgeText: 'ALVO',
+            badgeClasses: 'bg-purple-500 text-gray-900',
+        }
+    };
+
+    const styles = highlight ? highlightStyles[highlight] : null;
+
+    return (
+        <div className={`flex justify-between items-center py-1 text-sm rounded px-2 ${styles ? styles.wrapper : ''}`}>
+            <div className="flex items-center gap-2">
+                <span className={`font-semibold ${styles ? styles.label : color}`}>{label}</span>
+                {styles && (
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${styles.badgeClasses}`}>
+                        {styles.badgeText}
+                    </span>
+                )}
+            </div>
+            <span className={`font-mono ${styles ? styles.value : 'text-gray-300'}`}>{formattedPrice(value)}</span>
+        </div>
+    );
+};
 
 interface PivotPointsCardProps {
   pivots: PivotPoints | null;
@@ -114,7 +152,22 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
   const renderLevelList = (levels: {label: string, value: number, color: string}[]) => {
       return levels.map(level => {
           const isTrigger = signal.triggerLevel?.label === level.label;
-          return <PivotLevel key={level.label} {...level} isHighlighted={isTrigger} />;
+          const isTouchedVwap = signal.touchedVwapBand?.label === level.label;
+          const isTargetVwap = signal.vwapBandTarget?.label === level.label;
+          const isTouchedFibo = signal.touchedFiboRetracement?.label === level.label;
+          const isTargetFibo = signal.fiboRetracementTarget?.label === level.label;
+
+          let highlightType: 'trigger' | 'touched' | 'target' | undefined = undefined;
+
+          if (isTrigger) {
+              highlightType = 'trigger';
+          } else if (isTouchedVwap || isTouchedFibo) {
+              highlightType = 'touched';
+          } else if (isTargetVwap || isTargetFibo) {
+              highlightType = 'target';
+          }
+          
+          return <PivotLevel key={level.label} {...level} highlight={highlightType} />;
       });
   };
 
@@ -153,11 +206,30 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
           <div className="relative h-4 w-full bg-gray-700 rounded-full">
             {allLevels.map(level => {
               const isTrigger = signal.triggerLevel?.label === level.label;
+              const isTouchedVwap = signal.touchedVwapBand?.label === level.label;
+              const isTargetVwap = signal.vwapBandTarget?.label === level.label;
+              const isTouchedFibo = signal.touchedFiboRetracement?.label === level.label;
+              const isTargetFibo = signal.fiboRetracementTarget?.label === level.label;
+
+
+              let highlightColor = 'bg-gray-500';
+              if (isTrigger) {
+                  highlightColor = 'bg-cyan-400 shadow-lg shadow-cyan-500/50';
+              } else if (isTouchedVwap || isTouchedFibo) {
+                  highlightColor = 'bg-yellow-400 shadow-lg shadow-yellow-500/50';
+              } else if (isTargetVwap || isTargetFibo) {
+                  highlightColor = 'bg-purple-400 shadow-lg shadow-purple-500/50';
+              }
+
+              const isHighlighted = isTrigger || isTouchedVwap || isTouchedFibo || isTargetVwap || isTargetFibo;
+              const height = isHighlighted ? 'h-8' : 'h-6';
+              const top = isHighlighted ? '-8px' : '-4px';
+
               return (
                  <div
                     key={level.label}
-                    className={`absolute ${isTrigger ? 'h-8 w-0.5 bg-cyan-400 shadow-lg shadow-cyan-500/50' : 'h-6 w-px bg-gray-500'}`}
-                    style={{ left: `${getPosition(level.value)}%`, top: isTrigger ? '-8px' : '-4px' }}
+                    className={`absolute w-0.5 ${height} ${highlightColor}`}
+                    style={{ left: `${getPosition(level.value)}%`, top: top }}
                     title={`${level.label}: ${formattedPrice(level.value)}`}
                   />
               );
@@ -345,24 +417,32 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-gray-900 bg-gradient-to-br from-gray-900 via-gray-900 to-slate-800 text-gray-200">
             <header className="py-6 text-center border-b border-gray-800">
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">
-                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl sm:text-3xl lg:text-3xl text-gray-400 font-medium">(Análise H1)</span>
+                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl sm:text-3xl lg:text-3xl text-gray-400 font-medium">(Análise Diária - Swing Trade)</span>
                 </h1>
                 <p className="text-gray-400 mt-2 text-sm sm:text-base">Sinais de trading para BTC/USD baseados em confluência de indicadores.</p>
             </header>
 
             <main className="container mx-auto px-4">
                 <Section title="Análise em Tempo Real">
-                     <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         {error ? (
-                            <div className="bg-red-900/50 border border-red-500 text-red-300 p-6 rounded-xl shadow-lg text-center lg:col-span-2">
+                            <div className="bg-red-900/50 border border-red-500 text-red-300 p-6 rounded-xl shadow-lg text-center lg:col-span-3">
                               <h3 className="text-xl font-bold mb-2">Falha na Conexão</h3>
                               <p>Não foi possível obter os dados de preço mais recentes.</p>
                               <p className="text-sm text-red-400 mt-1">({error})</p>
                             </div>
                         ) : (
                             <>
-                                <SignalCard signal={signal} />
-                                <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />
+                                <div className="flex flex-col gap-8">
+                                    <SignalCard signal={signal} />
+                                    <PendingOrdersCard signal={signal} />
+                                </div>
+                                <div className="lg:col-span-2">
+                                    <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />
+                                </div>
+                                <div className="lg:col-span-3">
+                                    <CentAccountCalculatorCard signal={signal} />
+                                </div>
                             </>
                         )}
                      </div>

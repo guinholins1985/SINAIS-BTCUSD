@@ -65,11 +65,11 @@ const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number
 
 // --- Static Data ---
 const baseBuyReasons = [
-  "RSI < 20 indicando sobrevenda",
+  "RSI < 30 indicando sobrevenda",
 ];
 
 const baseSellReasons = [
-  "RSI > 90 indicando sobrecompra",
+  "RSI > 70 indicando sobrecompra",
 ];
 
 const holdReasons = [
@@ -98,6 +98,84 @@ const findClosestLevel = (price: number, levels: { label: string; value: number 
     .sort((a, b) => a.distance - b.distance)[0]; // Find the one with the smallest distance
 };
 
+/**
+ * Finds the closest VWAP band level from a given list of levels.
+ */
+const findClosestVwapBand = (price: number, levels: { label: string; value: number }[], type: 'support' | 'resistance') => {
+  const vwapBandLevels = levels.filter(l => l.label.includes('Banda'));
+  return findClosestLevel(price, vwapBandLevels, type);
+};
+
+/**
+ * Finds the closest Fibonacci Retracement level from a given list of levels.
+ */
+const findClosestFiboRetracement = (price: number, levels: { label: string; value: number }[], type: 'support' | 'resistance') => {
+  const fiboLevels = levels.filter(l => l.label.includes('Ret.'));
+  return findClosestLevel(price, fiboLevels, type);
+};
+
+
+/**
+ * Finds the next potential VWAP band target based on signal direction.
+ */
+const findNextVwapBandTarget = (price: number, levels: { label: string; value: number }[], action: SignalAction) => {
+    if (action === SignalAction.HOLD) return null;
+
+    const vwapBandLevels = levels.filter(l => l.label.includes('Banda'));
+
+    if (action === SignalAction.BUY) {
+        // Find the closest band *above* the current price
+        return vwapBandLevels
+            .filter(level => level.value > price)
+            .sort((a, b) => a.value - b.value)[0]; // Ascending sort, take first
+    } else { // SELL
+        // Find the closest band *below* the current price
+        return vwapBandLevels
+            .filter(level => level.value < price)
+            .sort((a, b) => b.value - a.value)[0]; // Descending sort, take first
+    }
+};
+
+/**
+ * Finds the next potential Fibonacci Retracement target based on signal direction.
+ */
+const findNextFiboRetracementTarget = (price: number, levels: { label: string; value: number }[], action: SignalAction) => {
+    if (action === SignalAction.HOLD) return null;
+
+    const fiboLevels = levels.filter(l => l.label.includes('Ret.'));
+
+    if (action === SignalAction.BUY) {
+        // Find the closest Fibo level *above* the current price
+        return fiboLevels
+            .filter(level => level.value > price)
+            .sort((a, b) => a.value - b.value)[0];
+    } else { // SELL
+        // Find the closest Fibo level *below* the current price
+        return fiboLevels
+            .filter(level => level.value < price)
+            .sort((a, b) => b.value - a.value)[0];
+    }
+};
+
+/**
+ * Finds the next potential Fibonacci Extension target based on signal direction.
+ */
+const findNextFiboExtensionTarget = (price: number, levels: { label: string; value: number }[], action: SignalAction) => {
+    if (action === SignalAction.HOLD) return null;
+
+    if (action === SignalAction.BUY) {
+        // Find the closest Fibo Extension level *above* the current price
+        return levels
+            .filter(level => level.value > price && level.label.includes('Compra'))
+            .sort((a, b) => a.value - b.value)[0];
+    } else { // SELL
+        // Find the closest Fibo Extension level *below* the current price
+        return levels
+            .filter(level => level.value < price && level.label.includes('Venda'))
+            .sort((a, b) => b.value - a.value)[0];
+    }
+};
+
 
 /**
  * Updates the internal signal state and generates a new signal object based on the provided live price, pivot points and VWAP levels.
@@ -120,27 +198,79 @@ export const updateAndGenerateSignal = (
     
     if (lastAction === SignalAction.BUY || lastAction === SignalAction.SELL) {
         currentSignalAction = SignalAction.HOLD;
-        signalDuration = getRandomDuration(10, 20); 
+        signalDuration = getRandomDuration(100, 200); 
     } else { 
         const rand = Math.random();
         currentSignalAction = rand > 0.5 ? SignalAction.BUY : SignalAction.SELL;
-        signalDuration = getRandomDuration(30, 60); 
+        signalDuration = getRandomDuration(500, 1000); 
     }
   }
 
   let reasons: string[];
   let entryRange;
   let triggerLevel: { label: string; value: number } | undefined = undefined;
+  let touchedVwapBand: { label: string; value: number } | undefined = undefined;
+  let vwapBandTarget: { label: string; value: number } | undefined = undefined;
+  let touchedFiboRetracement: { label: string; value: number } | undefined = undefined;
+  let fiboRetracementTarget: { label: string; value: number } | undefined = undefined;
+  let fiboExtensionTarget: { label: string; value: number; } | undefined = undefined;
   
   const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
+
+  const allVwapBandLevels = [];
+  if (vwapBands) {
+      allVwapBandLevels.push(
+        { label: '1ª Banda Inf. (Compra)', value: vwapBands.band1.lower },
+        { label: '2ª Banda Inf. (Compra)', value: vwapBands.band2.lower },
+        { label: '3ª Banda Inf. (Compra)', value: vwapBands.band3.lower },
+        { label: '4ª Banda Inf. (Compra)', value: vwapBands.band4.lower },
+        { label: '5ª Banda Inf. (Compra)', value: vwapBands.band5.lower },
+        { label: '1ª Banda Sup. (Venda)', value: vwapBands.band1.upper },
+        { label: '2ª Banda Sup. (Venda)', value: vwapBands.band2.upper },
+        { label: '3ª Banda Sup. (Venda)', value: vwapBands.band3.upper },
+        { label: '4ª Banda Sup. (Venda)', value: vwapBands.band4.upper },
+        { label: '5ª Banda Sup. (Venda)', value: vwapBands.band5.upper }
+      );
+  }
+  if (weeklyVwapBands) {
+      allVwapBandLevels.push(
+        { label: '1ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band1.lower },
+        { label: '2ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band2.lower },
+        { label: '3ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band3.lower },
+        { label: '4ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band4.lower },
+        { label: '5ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band5.lower },
+        { label: '1ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band1.upper },
+        { label: '2ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band2.upper },
+        { label: '3ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band3.upper },
+        { label: '4ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band4.upper },
+        { label: '5ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band5.upper }
+      );
+  }
+
+  const allFiboRetracementLevels = [
+    { label: 'Ret. Venda 200%', value: pivots.fiboRetSell200 }, { label: 'Ret. Venda 100%', value: pivots.fiboRetSell100 },
+    { label: 'Ret. Venda 61.8%', value: pivots.fiboRetSell61 }, { label: 'Ret. Venda 50%', value: pivots.fiboRetSell50 },
+    { label: 'Ret. Compra 50%', value: pivots.fiboRetBuy50 }, { label: 'Ret. Compra 61.8%', value: pivots.fiboRetBuy61 },
+    { label: 'Ret. Compra 100%', value: pivots.fiboRetBuy100 }, { label: 'Ret. Compra 200%', value: pivots.fiboRetBuy200 },
+  ];
+
+  const allFiboExtensionLevels = [
+    { label: 'Ext. Compra 100%', value: pivots.fiboExtBuy100 },
+    { label: 'Ext. Compra 200%', value: pivots.fiboExtBuy200 },
+    { label: 'Ext. Venda 100%', value: pivots.fiboExtSell100 },
+    { label: 'Ext. Venda 200%', value: pivots.fiboExtSell200 },
+  ];
+
+  vwapBandTarget = findNextVwapBandTarget(currentPrice, allVwapBandLevels, currentSignalAction);
+  fiboRetracementTarget = findNextFiboRetracementTarget(currentPrice, allFiboRetracementLevels, currentSignalAction);
+  fiboExtensionTarget = findNextFiboExtensionTarget(currentPrice, allFiboExtensionLevels, currentSignalAction);
+
 
   switch (currentSignalAction) {
     case SignalAction.BUY:
       const supportLevels = [
         { label: 'S1', value: pivots.s1 }, { label: 'S2', value: pivots.s2 }, { label: 'S3', value: pivots.s3 },
-        { label: 'Ret. Compra 50%', value: pivots.fiboRetBuy50 },
-        { label: 'Ret. Compra 61.8%', value: pivots.fiboRetBuy61 },
-        { label: 'Ret. Compra 100%', value: pivots.fiboRetBuy100 },
+        ...allFiboRetracementLevels,
       ];
       if (vwapBands) {
         supportLevels.push(
@@ -161,11 +291,37 @@ export const updateAndGenerateSignal = (
         );
       }
       const closestSupport = findClosestLevel(currentPrice, supportLevels, 'support');
+      const closestVwapBandSupport = findClosestVwapBand(currentPrice, supportLevels, 'support');
+      const closestFiboSupport = findClosestFiboRetracement(currentPrice, supportLevels, 'support');
       
       reasons = [...baseBuyReasons, ...vwapReasons];
       if (closestSupport) {
         reasons.unshift(`Preço próximo ao ${closestSupport.label} (${formattedPrice(closestSupport.value)})`);
         triggerLevel = closestSupport;
+      }
+      
+      if (closestVwapBandSupport) {
+        touchedVwapBand = closestVwapBandSupport;
+        if (triggerLevel?.label !== touchedVwapBand.label) {
+            reasons.push(`Preço tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
+        }
+      }
+
+      if (closestFiboSupport) {
+        touchedFiboRetracement = closestFiboSupport;
+        if (triggerLevel?.label !== touchedFiboRetracement.label) {
+            reasons.push(`Preço tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
+        }
+      }
+
+      if (vwapBandTarget) {
+          reasons.push(`Próximo alvo VWAP é a ${vwapBandTarget.label} (${formattedPrice(vwapBandTarget.value)})`);
+      }
+      if (fiboRetracementTarget) {
+          reasons.push(`Próximo alvo Fibo é a ${fiboRetracementTarget.label} (${formattedPrice(fiboRetracementTarget.value)})`);
+      }
+      if (fiboExtensionTarget) {
+          reasons.push(`Alvo assertivo (Ext. Fibo) em ${fiboExtensionTarget.label} (${formattedPrice(fiboExtensionTarget.value)})`);
       }
       
       entryRange = { min: currentPrice * 0.998, max: currentPrice * 1.001 };
@@ -174,9 +330,7 @@ export const updateAndGenerateSignal = (
     case SignalAction.SELL:
       const resistanceLevels = [
         { label: 'R1', value: pivots.r1 }, { label: 'R2', value: pivots.r2 }, { label: 'R3', value: pivots.r3 },
-        { label: 'Ret. Venda 50%', value: pivots.fiboRetSell50 },
-        { label: 'Ret. Venda 61.8%', value: pivots.fiboRetSell61 },
-        { label: 'Ret. Venda 100%', value: pivots.fiboRetSell100 },
+        ...allFiboRetracementLevels,
       ];
       if (vwapBands) {
         resistanceLevels.push(
@@ -197,11 +351,37 @@ export const updateAndGenerateSignal = (
         );
       }
        const closestResistance = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
+       const closestVwapBandResistance = findClosestVwapBand(currentPrice, resistanceLevels, 'resistance');
+       const closestFiboResistance = findClosestFiboRetracement(currentPrice, resistanceLevels, 'resistance');
 
       reasons = [...baseSellReasons, ...vwapReasons];
       if (closestResistance) {
         reasons.unshift(`Preço próximo à ${closestResistance.label} (${formattedPrice(closestResistance.value)})`);
         triggerLevel = closestResistance;
+      }
+
+      if (closestVwapBandResistance) {
+        touchedVwapBand = closestVwapBandResistance;
+        if (triggerLevel?.label !== touchedVwapBand.label) {
+            reasons.push(`Preço tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
+        }
+      }
+
+      if (closestFiboResistance) {
+        touchedFiboRetracement = closestFiboResistance;
+        if (triggerLevel?.label !== touchedFiboRetracement.label) {
+            reasons.push(`Preço tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
+        }
+      }
+
+      if (vwapBandTarget) {
+          reasons.push(`Próximo alvo VWAP é a ${vwapBandTarget.label} (${formattedPrice(vwapBandTarget.value)})`);
+      }
+      if (fiboRetracementTarget) {
+          reasons.push(`Próximo alvo Fibo é a ${fiboRetracementTarget.label} (${formattedPrice(fiboRetracementTarget.value)})`);
+      }
+      if (fiboExtensionTarget) {
+          reasons.push(`Alvo assertivo (Ext. Fibo) em ${fiboExtensionTarget.label} (${formattedPrice(fiboExtensionTarget.value)})`);
       }
 
       entryRange = { min: currentPrice * 0.999, max: currentPrice * 1.002 };
@@ -227,5 +407,10 @@ export const updateAndGenerateSignal = (
     takeProfit,
     entryRange,
     triggerLevel,
+    touchedVwapBand,
+    vwapBandTarget,
+    touchedFiboRetracement,
+    fiboRetracementTarget,
+    fiboExtensionTarget,
   };
 };

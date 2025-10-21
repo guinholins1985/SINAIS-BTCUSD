@@ -15,6 +15,11 @@ export interface Signal {
   stopLoss: number;
   takeProfit: number;
   triggerLevel?: { label: string; value: number; };
+  touchedVwapBand?: { label: string; value: number; };
+  vwapBandTarget?: { label: string; value: number; };
+  touchedFiboRetracement?: { label: string; value: number; };
+  fiboRetracementTarget?: { label: string; value: number; };
+  fiboExtensionTarget?: { label: string; value: number; };
 }
 
 export interface BacktestEntry {
