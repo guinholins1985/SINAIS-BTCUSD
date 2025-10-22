@@ -14,7 +14,7 @@ export const BacktestTable: React.FC<BacktestTableProps> = ({ data }) => {
           <tr>
             <th scope="col" className="px-6 py-3">Data</th>
             <th scope="col" className="px-6 py-3">Preço BTC</th>
-            <th scope="col" className="px-6 py-3">RSI 15</th>
+            <th scope="col" className="px-6 py-3">RSI 15 (10/90)</th>
             <th scope="col" className="px-6 py-3">VWAP Diário</th>
             <th scope="col" className="px-6 py-3">VWAP Semanal</th>
             <th scope="col" className="px-6 py-3">MM80</th>

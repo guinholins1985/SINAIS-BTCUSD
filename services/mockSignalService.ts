@@ -1,3 +1,4 @@
+
 import { SignalAction, type Signal, type PivotPoints, type VwapBands } from '../types';
 
 // --- Pivot Point Calculation ---
@@ -54,6 +55,33 @@ const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number
     const actionText = action === SignalAction.BUY ? 'suporte' : 'resistência';
 
     for (const level of vwapLevels) {
+        if (level.value === 0) continue;
+        const distance = Math.abs(price - level.value) / level.value;
+        if (distance < proximityThreshold) {
+            reasons.push(`Preço testando ${actionText} na VWAP ${level.label} (${formattedPrice(level.value)})`);
+        }
+    }
+    return reasons;
+};
+
+const getPreviousVwapReasons = (price: number, vwapData: { daily: number; weekly: number; monthly: number; } | null, action: SignalAction): string[] => {
+    const reasons: string[] = [];
+    if (!vwapData) return reasons;
+
+    const proximityThreshold = 0.01; // 1% proximity
+
+    const vwapLevels = [
+        { label: 'Diária Anterior', value: vwapData.daily },
+        { label: 'Semanal Anterior', value: vwapData.weekly },
+        { label: 'Mensal Anterior', value: vwapData.monthly },
+    ];
+
+    if (action === SignalAction.HOLD) return [];
+
+    const actionText = action === SignalAction.BUY ? 'suporte' : 'resistência';
+
+    for (const level of vwapLevels) {
+        if (level.value === 0) continue;
         const distance = Math.abs(price - level.value) / level.value;
         if (distance < proximityThreshold) {
             reasons.push(`Preço testando ${actionText} na VWAP ${level.label} (${formattedPrice(level.value)})`);
@@ -65,11 +93,11 @@ const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number
 
 // --- Static Data ---
 const baseBuyReasons = [
-  "RSI < 30 indicando sobrevenda",
+  "RSI < 10 indicando sobrevenda extrema",
 ];
 
 const baseSellReasons = [
-  "RSI > 70 indicando sobrecompra",
+  "RSI > 90 indicando sobrecompra extrema",
 ];
 
 const holdReasons = [
@@ -176,6 +204,53 @@ const findNextFiboExtensionTarget = (price: number, levels: { label: string; val
     }
 };
 
+/**
+ * Determines the recommended trading window based on market session overlaps and the current signal.
+ * @returns An object with the start time, end time, a descriptive reason, and a status.
+ */
+const determineTradingWindowAnalysis = (action: SignalAction): { start: string; end: string; reason: string; status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE' } => {
+    const now = new Date();
+    const currentUTCHour = now.getUTCHours();
+    
+    // London & New York session overlap (approx. 12:00 to 16:00 UTC)
+    const startHourUTC = 12;
+    const endHourUTC = 16;
+
+    let reason = '';
+    let status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE';
+    const baseReason = `a sobreposição das sessões de Londres e Nova Iorque`;
+
+    if (currentUTCHour >= startHourUTC && currentUTCHour < endHourUTC) {
+        status = 'IN_WINDOW';
+        switch (action) {
+            case SignalAction.BUY:
+                reason = `AGORA: A alta volatilidade (${baseReason}) favorece a reversão esperada de níveis de sobrevenda.`;
+                break;
+            case SignalAction.SELL:
+                reason = `AGORA: A alta liquidez (${baseReason}) é ideal para capitalizar na reversão de níveis de sobrecompra.`;
+                break;
+            default: // HOLD
+                reason = `Estamos no horário de pico, mas os indicadores sugerem aguardar por um sinal mais claro. ${baseReason} gera volatilidade.`;
+        }
+    } else if (currentUTCHour >= startHourUTC - 2 && currentUTCHour < startHourUTC) { // Approaching window (2 hours before)
+        status = 'APPROACHING';
+        reason = `O período de alta volatilidade está se aproximando (${startHourUTC}:00 UTC). Prepare-se para executar a estratégia.`;
+    } else {
+        status = 'OUTSIDE';
+        if (currentUTCHour < startHourUTC) {
+            reason = `Fora do horário de pico. A próxima janela de alta volatilidade (${baseReason}) começa às ${startHourUTC}:00 UTC.`;
+        } else {
+            reason = `O horário de pico de hoje já passou. Considere operar com cautela ou aguardar a próxima janela amanhã.`;
+        }
+    }
+
+    return {
+        start: `${startHourUTC}:00`,
+        end: `${endHourUTC}:00`,
+        reason: reason,
+        status: status,
+    };
+};
 
 /**
  * Updates the internal signal state and generates a new signal object based on the provided live price, pivot points and VWAP levels.
@@ -184,6 +259,7 @@ const findNextFiboExtensionTarget = (price: number, levels: { label: string; val
  * @param vwap The calculated VWAP levels for daily, weekly, and monthly timeframes.
  * @param vwapBands The calculated daily VWAP bands.
  * @param weeklyVwapBands The calculated weekly VWAP bands.
+ * @param previousVwaps The calculated VWAP levels for the previous day, week, and month.
  * @returns A new Signal object.
  */
 export const updateAndGenerateSignal = (
@@ -191,7 +267,8 @@ export const updateAndGenerateSignal = (
   pivots: PivotPoints,
   vwap: { daily: number; weekly: number; monthly: number; },
   vwapBands: VwapBands | null,
-  weeklyVwapBands: VwapBands | null
+  weeklyVwapBands: VwapBands | null,
+  previousVwaps: { daily: number; weekly: number; monthly: number; } | null
 ): Signal => {
   if (signalDuration <= 0) {
     const lastAction = currentSignalAction;
@@ -216,6 +293,7 @@ export const updateAndGenerateSignal = (
   let fiboExtensionTarget: { label: string; value: number; } | undefined = undefined;
   
   const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
+  const prevVwapReasons = getPreviousVwapReasons(currentPrice, previousVwaps, currentSignalAction);
 
   const allVwapBandLevels = [];
   if (vwapBands) {
@@ -294,7 +372,7 @@ export const updateAndGenerateSignal = (
       const closestVwapBandSupport = findClosestVwapBand(currentPrice, supportLevels, 'support');
       const closestFiboSupport = findClosestFiboRetracement(currentPrice, supportLevels, 'support');
       
-      reasons = [...baseBuyReasons, ...vwapReasons];
+      reasons = [...baseBuyReasons, ...vwapReasons, ...prevVwapReasons];
       if (closestSupport) {
         reasons.unshift(`Preço próximo ao ${closestSupport.label} (${formattedPrice(closestSupport.value)})`);
         triggerLevel = closestSupport;
@@ -354,7 +432,7 @@ export const updateAndGenerateSignal = (
        const closestVwapBandResistance = findClosestVwapBand(currentPrice, resistanceLevels, 'resistance');
        const closestFiboResistance = findClosestFiboRetracement(currentPrice, resistanceLevels, 'resistance');
 
-      reasons = [...baseSellReasons, ...vwapReasons];
+      reasons = [...baseSellReasons, ...vwapReasons, ...prevVwapReasons];
       if (closestResistance) {
         reasons.unshift(`Preço próximo à ${closestResistance.label} (${formattedPrice(closestResistance.value)})`);
         triggerLevel = closestResistance;
@@ -397,6 +475,8 @@ export const updateAndGenerateSignal = (
   const takeProfit = currentSignalAction === SignalAction.BUY ? entryRange.max * 1.03 : entryRange.min * 0.97;
   
   signalDuration--;
+  
+  const recommendedTradingWindow = determineTradingWindowAnalysis(currentSignalAction);
 
   return {
     action: currentSignalAction,
@@ -412,5 +492,6 @@ export const updateAndGenerateSignal = (
     touchedFiboRetracement,
     fiboRetracementTarget,
     fiboExtensionTarget,
+    recommendedTradingWindow,
   };
 };

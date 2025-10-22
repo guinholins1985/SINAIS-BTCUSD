@@ -5,7 +5,7 @@ export const BACKTEST_DATA: BacktestEntry[] = [
   {
     date: '2025-10-10',
     price: '$50,000',
-    rsi15: 18,
+    rsi15: 8,
     vwapDaily: '$49,800',
     vwapWeekly: '$49,500',
     mm80: '$49,200',
@@ -27,7 +27,7 @@ export const BACKTEST_DATA: BacktestEntry[] = [
    {
     date: '2025-09-22',
     price: '$45,500',
-    rsi15: 19,
+    rsi15: 9,
     vwapDaily: '$45,450',
     vwapWeekly: '$45,100',
     mm80: '$44,800',

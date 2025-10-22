@@ -1,6 +1,6 @@
 import React from 'react';
 import { SignalAction, type Signal } from '../types';
-import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, PauseIcon, CheckCircleIcon } from './icons';
+import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, PauseIcon, CheckCircleIcon, ClockIcon } from './icons';
 
 interface SignalCardProps {
   signal: Signal | null;
@@ -62,6 +62,31 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
   const styles = getSignalStyles(signal.action);
   const entryDetails = getEntryDetails(signal.action);
   const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const { recommendedTradingWindow } = signal;
+
+  const getWindowStyles = (status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE') => {
+      switch (status) {
+          case 'IN_WINDOW':
+              return {
+                  textColor: 'text-cyan-400 animate-pulse',
+                  label: 'AGORA: Melhor Horário',
+              };
+          case 'APPROACHING':
+              return {
+                  textColor: 'text-yellow-400',
+                  label: 'EM BREVE: Melhor Horário',
+              };
+          case 'OUTSIDE':
+          default:
+              return {
+                  textColor: 'text-gray-400',
+                  label: 'Melhor Horário p/ Operar',
+              };
+      }
+  };
+
+  const windowStyles = getWindowStyles(recommendedTradingWindow.status);
+
 
   return (
     <div className={`border ${styles.bg} rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden transform hover:scale-[1.01] transition-transform duration-300`}>
@@ -72,6 +97,12 @@ export const SignalCard: React.FC<SignalCardProps> = ({ signal }) => {
             <p className="text-gray-400 text-sm">
               {signal.timestamp.toLocaleTimeString('pt-BR')} - BTC/USD
             </p>
+            <div className={`flex items-center ${windowStyles.textColor} mt-2`} title={recommendedTradingWindow.reason}>
+                <ClockIcon className="h-4 w-4 mr-1.5" />
+                <p className="text-xs font-semibold">
+                    {windowStyles.label}: {recommendedTradingWindow.start} - {recommendedTradingWindow.end} (UTC)
+                </p>
+            </div>
           </div>
           <div className={styles.text}>{styles.icon}</div>
         </div>

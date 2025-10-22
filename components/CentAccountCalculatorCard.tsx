@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { SignalAction, type Signal } from '../types';
 
@@ -27,6 +26,10 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
         const stopLossPrice = signal.stopLoss;
         const takeProfitPrice = signal.takeProfit;
 
+        const stopLoss1PercentPrice = signal.action === SignalAction.BUY 
+            ? entryPrice * 0.99 
+            : entryPrice * 1.01;
+
         const stopLossDistance = Math.abs(entryPrice - stopLossPrice);
         if (stopLossDistance === 0) return null; // Avoid division by zero
 
@@ -47,9 +50,18 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
             takeProfitPrice,
             riskAmount,
             returnAmount,
-            goal
+            goal,
+            stopLoss1PercentPrice,
         };
     }, [signal, balance]);
+
+    const getWindowStatusColor = (status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE' | undefined) => {
+        switch (status) {
+            case 'IN_WINDOW': return 'text-cyan-400';
+            case 'APPROACHING': return 'text-yellow-400';
+            default: return 'text-gray-400'; // OUTSIDE or undefined
+        }
+    };
 
     return (
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
@@ -83,7 +95,24 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                         value={formattedPrice(calculations.entryPrice)}
                         valueClassName={signal.action === SignalAction.BUY ? 'text-green-400' : 'text-red-400'}
                     />
-                    <InfoRow label="Stop Loss (Preço)" value={formattedPrice(calculations.stopLossPrice)} valueClassName="text-red-400" />
+                     <InfoRow 
+                        label="Melhor Horário p/ Operar" 
+                        value={`${signal.recommendedTradingWindow.start} - ${signal.recommendedTradingWindow.end} (UTC)`}
+                        valueClassName={getWindowStatusColor(signal.recommendedTradingWindow.status)}
+                        tooltip={signal.recommendedTradingWindow.reason}
+                    />
+                    <InfoRow 
+                        label="Stop Loss (Sugerido)" 
+                        value={formattedPrice(calculations.stopLossPrice)} 
+                        valueClassName="text-red-400"
+                        tooltip="Stop loss sugerido pela estratégia de confluência, posicionado a ~1.5% da faixa de entrada."
+                    />
+                    <InfoRow 
+                        label="Stop Loss (1%)" 
+                        value={formattedPrice(calculations.stopLoss1PercentPrice)} 
+                        valueClassName="text-red-400"
+                        tooltip="Stop loss mais curto, posicionado a 1% do preço de entrada atual para uma gestão de risco mais agressiva."
+                    />
                     <InfoRow label="Take Profit (Preço)" value={formattedPrice(calculations.takeProfitPrice)} valueClassName="text-green-400" />
 
                     {signal.fiboExtensionTarget && (

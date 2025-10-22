@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { SignalAction, type Signal, type PivotPoints, type VwapBands } from './types';
 import { SignalCard } from './components/SignalCard';
@@ -297,6 +296,7 @@ const App: React.FC = () => {
     const [pivots, setPivots] = useState<PivotPoints | null>(null);
     const [vwapBands, setVwapBands] = useState<VwapBands | null>(null);
     const [weeklyVwapBands, setWeeklyVwapBands] = useState<VwapBands | null>(null);
+    const [previousVwaps, setPreviousVwaps] = useState<{ daily: number; weekly: number; monthly: number; } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -307,7 +307,7 @@ const App: React.FC = () => {
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=2'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=3'),
                 ]);
 
                 if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok) {
@@ -373,29 +373,38 @@ const App: React.FC = () => {
                     return { vwap, bands };
                 };
                 
+                const calculateTypicalPriceFromKline = (kline: any[]): number => {
+                    if (!kline || kline.length < 5) return 0;
+                    const h = parseFloat(kline[2]);
+                    const l = parseFloat(kline[3]);
+                    const c = parseFloat(kline[4]);
+                    if (isNaN(h) || isNaN(l) || isNaN(c)) return 0;
+                    return (h + l + c) / 3;
+                };
+                
+                const prevVwaps = {
+                    daily: calculateTypicalPriceFromKline(dailyKlineData.length > 1 ? dailyKlineData[dailyKlineData.length - 2] : []),
+                    weekly: calculateTypicalPriceFromKline(weeklyKlineData.length > 1 ? weeklyKlineData[weeklyKlineData.length - 2] : []),
+                    monthly: calculateTypicalPriceFromKline(monthlyKlineData.length > 1 ? monthlyKlineData[monthlyKlineData.length - 2] : []),
+                };
+                setPreviousVwaps(prevVwaps);
+
                 const { vwap: dailyVwap, bands: calculatedBands } = calculateVwapAndBands(dailyKlineData);
                 setVwapBands(calculatedBands);
 
                 const { vwap: weeklyVwap, bands: calculatedWeeklyBands } = calculateVwapAndBands(weeklyKlineData);
                 setWeeklyVwapBands(calculatedWeeklyBands);
 
-                const calculateVwapFromKline = (kline: any[]): number => {
-                    const h = parseFloat(kline[2]);
-                    const l = parseFloat(kline[3]);
-                    const c = parseFloat(kline[4]);
-                    if (isNaN(h) || isNaN(l) || isNaN(c)) {
-                        return 0; // Return 0 or handle error appropriately
-                    }
-                    return (h + l + c) / 3;
-                };
-
                 const vwap = {
                     daily: dailyVwap,
                     weekly: weeklyVwap,
-                    monthly: calculateVwapFromKline(monthlyKlineData.length > 1 ? monthlyKlineData[0] : []),
+                    monthly: calculateTypicalPriceFromKline(monthlyKlineData.length > 1 ? monthlyKlineData[monthlyKlineData.length - 1] : []),
                 };
-
-                setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands));
+                
+                if (calculatedPivots && vwap && calculatedBands && calculatedWeeklyBands && prevVwaps) {
+                  setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands, prevVwaps));
+                }
+                
                 if (error) setError(null);
             } catch (err) {
                 console.error("Falha ao buscar dados ou gerar sinal:", err);

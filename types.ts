@@ -20,6 +20,12 @@ export interface Signal {
   touchedFiboRetracement?: { label: string; value: number; };
   fiboRetracementTarget?: { label: string; value: number; };
   fiboExtensionTarget?: { label: string; value: number; };
+  recommendedTradingWindow: { 
+    start: string; 
+    end: string; 
+    reason: string; 
+    status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE';
+  };
 }
 
 export interface BacktestEntry {
