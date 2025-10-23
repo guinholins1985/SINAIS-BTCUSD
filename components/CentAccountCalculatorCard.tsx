@@ -50,11 +50,10 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
         };
     }, [signal, balance]);
 
-    const getWindowStatusColor = (status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE' | undefined) => {
+    const getHoldingPeriodStatusColor = (status: 'SIGNAL_ACTIVE' | 'NO_SIGNAL' | undefined) => {
         switch (status) {
-            case 'IN_WINDOW': return 'text-cyan-400';
-            case 'APPROACHING': return 'text-yellow-400';
-            default: return 'text-gray-400'; // OUTSIDE or undefined
+            case 'SIGNAL_ACTIVE': return 'text-cyan-400';
+            default: return 'text-gray-400'; // NO_SIGNAL or undefined
         }
     };
 
@@ -91,22 +90,22 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                         valueClassName={signal.action === SignalAction.BUY ? 'text-green-400' : 'text-red-400'}
                     />
                      <InfoRow 
-                        label="Melhor Horário p/ Operar" 
-                        value={`${signal.recommendedTradingWindow.start} - ${signal.recommendedTradingWindow.end} (UTC)`}
-                        valueClassName={getWindowStatusColor(signal.recommendedTradingWindow.status)}
-                        tooltip={signal.recommendedTradingWindow.reason}
+                        label="Período Recomendado" 
+                        value={`${signal.recommendedHoldingPeriod.period}`}
+                        valueClassName={getHoldingPeriodStatusColor(signal.recommendedHoldingPeriod.status)}
+                        tooltip={signal.recommendedHoldingPeriod.reason}
                     />
                     <InfoRow 
-                        label="Stop Loss (Sugerido 0.50%)" 
+                        label="Stop Loss (Sugerido 5.00%)" 
                         value={formattedPrice(calculations.stopLossPrice)} 
                         valueClassName="text-red-400"
-                        tooltip="Stop loss sugerido pela estratégia, posicionado a 0.50% do preço de entrada."
+                        tooltip="Stop loss sugerido pela estratégia, posicionado a 5.00% do preço de entrada para Position Trading."
                     />
                     <InfoRow 
-                        label="Take Profit (Sugerido 1.50%)" 
+                        label="Take Profit (Sugerido 15.00%)" 
                         value={formattedPrice(calculations.takeProfitPrice)} 
                         valueClassName="text-green-400"
-                        tooltip="Take profit sugerido para uma relação Risco/Retorno de 1:3."
+                        tooltip="Take profit sugerido para uma relação Risco/Retorno de 1:3 para Position Trading."
                     />
 
                     {signal.fiboExtensionTarget && (

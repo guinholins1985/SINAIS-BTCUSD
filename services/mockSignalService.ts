@@ -235,50 +235,31 @@ const findNextFiboExtensionTarget = (price: number, levels: { label: string; val
 };
 
 /**
- * Determines the recommended trading window based on market session overlaps and the current signal.
- * @returns An object with the start time, end time, a descriptive reason, and a status.
+ * Determines the recommended holding period based on the signal.
+ * @returns An object with the period, a descriptive reason, and a status.
  */
-const determineTradingWindowAnalysis = (action: SignalAction): { start: string; end: string; reason: string; status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE' } => {
-    const now = new Date();
-    const currentUTCHour = now.getUTCHours();
-    
-    // London & New York session overlap (approx. 12:00 to 16:00 UTC)
-    const startHourUTC = 12;
-    const endHourUTC = 16;
-
+const determineHoldingPeriodAnalysis = (action: SignalAction): { period: string; reason: string; status: 'SIGNAL_ACTIVE' | 'NO_SIGNAL' } => {
     let reason = '';
-    let status: 'IN_WINDOW' | 'APPROACHING' | 'OUTSIDE';
-    const baseReason = `a sobreposição das sessões de Londres e Nova Iorque`;
+    let status: 'SIGNAL_ACTIVE' | 'NO_SIGNAL';
+    let period = '';
 
-    if (currentUTCHour >= startHourUTC && currentUTCHour < endHourUTC) {
-        status = 'IN_WINDOW';
-        switch (action) {
-            case SignalAction.BUY:
-                reason = `AGORA: A alta volatilidade (${baseReason}) favorece a reversão esperada de níveis de sobrevenda.`;
-                break;
-            case SignalAction.SELL:
-                reason = `AGORA: A alta liquidez (${baseReason}) é ideal para capitalizar na reversão de níveis de sobrecompra.`;
-                break;
-            default: // HOLD
-                reason = `Estamos no horário de pico, mas os indicadores sugerem aguardar por um sinal mais claro. ${baseReason} gera volatilidade.`;
-        }
-    } else if (currentUTCHour >= startHourUTC - 2 && currentUTCHour < startHourUTC) { // Approaching window (2 hours before)
-        status = 'APPROACHING';
-        reason = `O período de alta volatilidade está se aproximando (${startHourUTC}:00 UTC). Prepare-se para executar a estratégia.`;
-    } else {
-        status = 'OUTSIDE';
-        if (currentUTCHour < startHourUTC) {
-            reason = `Fora do horário de pico. A próxima janela de alta volatilidade (${baseReason}) começa às ${startHourUTC}:00 UTC.`;
-        } else {
-            reason = `O horário de pico de hoje já passou. Considere operar com cautela ou aguardar a próxima janela amanhã.`;
-        }
+    switch (action) {
+        case SignalAction.BUY:
+        case SignalAction.SELL:
+            status = 'SIGNAL_ACTIVE';
+            period = 'Semanas a Meses';
+            reason = `Sinais baseados em indicadores diários são projetados para capturar tendências de longo prazo. Recomenda-se manter a posição por semanas ou meses para atingir os alvos de lucro.`;
+            break;
+        default: // HOLD
+            status = 'NO_SIGNAL';
+            period = 'Indefinido';
+            reason = `Nenhum sinal de longo prazo ativo. Aguarde uma entrada clara baseada em indicadores diários para definir um período de holding.`;
     }
 
     return {
-        start: `${startHourUTC}:00`,
-        end: `${endHourUTC}:00`,
-        reason: reason,
-        status: status,
+        period,
+        reason,
+        status,
     };
 };
 
@@ -365,14 +346,14 @@ export const updateAndGenerateSignal = (
   // --- NEW RSI-BASED TRIGGER LOGIC ---
   if (rsi <= 30) {
       currentSignalAction = SignalAction.BUY;
-      reasons.push(`Principal: RSI (14) em ${rsi.toFixed(2)} indica sobrevenda.`);
+      reasons.push(`Principal: RSI Diário (14) em ${rsi.toFixed(2)} indica sobrevenda.`);
       triggerLevel = findClosestLevel(currentPrice, supportLevels, 'support');
       if (triggerLevel) {
           reasons.push(`Confirmação: Preço próximo ao suporte ${triggerLevel.label} (${formattedPrice(triggerLevel.value)})`);
       }
   } else if (rsi >= 70) {
       currentSignalAction = SignalAction.SELL;
-      reasons.push(`Principal: RSI (14) em ${rsi.toFixed(2)} indica sobrecompra.`);
+      reasons.push(`Principal: RSI Diário (14) em ${rsi.toFixed(2)} indica sobrecompra.`);
       triggerLevel = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
       if (triggerLevel) {
           reasons.push(`Confirmação: Preço próximo à resistência ${triggerLevel.label} (${formattedPrice(triggerLevel.value)})`);
@@ -482,12 +463,12 @@ export const updateAndGenerateSignal = (
       break;
   }
 
-  // --- UPDATED STOP LOSS & TAKE PROFIT ---
-  // SL: 0.50%, TP: 1.50% for a 1:3 Risk/Reward ratio
-  const stopLoss = currentSignalAction === SignalAction.BUY ? currentPrice * 0.995 : currentPrice * 1.005;
-  const takeProfit = currentSignalAction === SignalAction.BUY ? currentPrice * 1.015 : currentPrice * 0.985;
+  // --- UPDATED STOP LOSS & TAKE PROFIT for POSITION TRADING ---
+  // SL: 5%, TP: 15% for a 1:3 Risk/Reward ratio
+  const stopLoss = currentSignalAction === SignalAction.BUY ? currentPrice * 0.95 : currentPrice * 1.05;
+  const takeProfit = currentSignalAction === SignalAction.BUY ? currentPrice * 1.15 : currentPrice * 0.85;
     
-  const recommendedTradingWindow = determineTradingWindowAnalysis(currentSignalAction);
+  const recommendedHoldingPeriod = determineHoldingPeriodAnalysis(currentSignalAction);
 
   return {
     action: currentSignalAction,
@@ -503,6 +484,6 @@ export const updateAndGenerateSignal = (
     touchedFiboRetracement,
     fiboRetracementTarget,
     fiboExtensionTarget,
-    recommendedTradingWindow,
+    recommendedHoldingPeriod,
   };
 };

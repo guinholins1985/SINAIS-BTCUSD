@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SignalAction, type BacktestEntry } from '../types';
 
@@ -14,7 +13,7 @@ export const BacktestTable: React.FC<BacktestTableProps> = ({ data }) => {
           <tr>
             <th scope="col" className="px-6 py-3">Data</th>
             <th scope="col" className="px-6 py-3">Preço BTC</th>
-            <th scope="col" className="px-6 py-3">RSI 15 (10/90)</th>
+            <th scope="col" className="px-6 py-3">RSI Diário (30/70)</th>
             <th scope="col" className="px-6 py-3">VWAP Diário</th>
             <th scope="col" className="px-6 py-3">VWAP Semanal</th>
             <th scope="col" className="px-6 py-3">MM80</th>
@@ -28,7 +27,7 @@ export const BacktestTable: React.FC<BacktestTableProps> = ({ data }) => {
             <tr key={index} className="border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-200">
               <td className="px-6 py-4 whitespace-nowrap">{entry.date}</td>
               <td className="px-6 py-4 font-medium text-white">{entry.price}</td>
-              <td className="px-6 py-4">{entry.rsi15}</td>
+              <td className="px-6 py-4">{entry.rsiDaily}</td>
               <td className="px-6 py-4">{entry.vwapDaily}</td>
               <td className="px-6 py-4">{entry.vwapWeekly}</td>
               <td className="px-6 py-4">{entry.mm80}</td>

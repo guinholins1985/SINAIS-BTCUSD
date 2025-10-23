@@ -188,14 +188,14 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
-      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave de Preço</h3>
+      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave Semanais</h3>
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
         <div className="w-full lg:w-1/2 flex-shrink-0">
-          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points</h4>
+          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points (Semanal)</h4>
           {renderLevelList(pivotLevels)}
-           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci</h4>
+           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci (Semanal)</h4>
           {renderLevelList(fiboRetracementLevels)}
-          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci</h4>
+          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci (Semanal)</h4>
           {renderLevelList(fiboExtensionLevels)}
           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Bandas VWAP (Diário)</h4>
           {renderLevelList(vwapBandLevels)}
@@ -341,7 +341,7 @@ const App: React.FC = () => {
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=3'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=100'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=100'),
                 ]);
 
                 if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok || !rsiKlineResponse.ok) {
@@ -359,20 +359,20 @@ const App: React.FC = () => {
                     throw new Error('Formato de preço inválido recebido da API.');
                 }
                 
-                const yesterdayKline = dailyKlineData[dailyKlineData.length - 2];
-                const high = parseFloat(yesterdayKline[2]);
-                const low = parseFloat(yesterdayKline[3]);
-                const close = parseFloat(yesterdayKline[4]);
+                const prevWeekKline = weeklyKlineData[weeklyKlineData.length - 2];
+                const high = parseFloat(prevWeekKline[2]);
+                const low = parseFloat(prevWeekKline[3]);
+                const close = parseFloat(prevWeekKline[4]);
 
                 if (isNaN(high) || isNaN(low) || isNaN(close)) {
-                    throw new Error('Formato de kline diário inválido recebido da API.');
+                    throw new Error('Formato de kline semanal inválido recebido da API.');
                 }
                 
                 const rsiCloses = rsiKlineData.map((k: any) => parseFloat(k[4]));
                 const currentRsi = calculateRSI(rsiCloses);
 
                 if (currentRsi === null) {
-                    throw new Error('Não há dados suficientes para calcular o RSI.');
+                    throw new Error('Não há dados suficientes para calcular o RSI diário.');
                 }
 
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
@@ -468,7 +468,7 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-gray-900 bg-gradient-to-br from-gray-900 via-gray-900 to-slate-800 text-gray-200">
             <header className="py-6 text-center border-b border-gray-800">
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">
-                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl sm:text-3xl lg:text-3xl text-gray-400 font-medium">(Análise Diária - Swing Trade)</span>
+                    <span className="text-cyan-400">BTC</span> Confluence Pro <span className="text-2xl sm:text-3xl lg:text-3xl text-gray-400 font-medium">(Modo Análise - Position Trader)</span>
                 </h1>
                 <p className="text-gray-400 mt-2 text-sm sm:text-base">Sinais de trading para BTC/USD baseados em confluência de indicadores.</p>
             </header>
