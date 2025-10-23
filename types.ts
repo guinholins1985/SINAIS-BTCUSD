@@ -6,6 +6,21 @@ export enum SignalAction {
   HOLD = 'Manter'
 }
 
+// Added for News Sentiment feature
+export type NewsSentiment = 'Positive' | 'Negative' | 'Neutral';
+
+export interface NewsHeadline {
+  title: string;
+  source: string;
+}
+
+export interface NewsAnalysis {
+  headlines: NewsHeadline[];
+  overallSentiment: NewsSentiment;
+  summary: string;
+}
+
+
 export interface Signal {
   action: SignalAction;
   currentPrice: number;

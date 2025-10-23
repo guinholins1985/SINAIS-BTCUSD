@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
-import { SignalAction, type Signal, type PivotPoints, type VwapBands } from './types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis } from './types';
 import { SignalCard } from './components/SignalCard';
 import { PendingOrdersCard } from './components/PendingOrdersCard';
 import { CentAccountCalculatorCard } from './components/CentAccountCalculatorCard';
-import { updateAndGenerateSignal, calculateClassicPivotPoints } from './services/mockSignalService';
+import { NewsSentimentCard } from './components/NewsSentimentCard';
+import { updateAndGenerateSignal, calculateClassicPivotPoints, calculateRSI } from './services/mockSignalService';
+import { fetchAndAnalyzeNews } from './services/mockNewsService';
 
 // --- PivotPointsCard Component and Helpers ---
 
@@ -293,24 +294,57 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 const App: React.FC = () => {
     const [signal, setSignal] = useState<Signal | null>(null);
+    const [news, setNews] = useState<NewsAnalysis | null>(null);
+    const [nextNewsUpdate, setNextNewsUpdate] = useState<Date | null>(null);
     const [pivots, setPivots] = useState<PivotPoints | null>(null);
     const [vwapBands, setVwapBands] = useState<VwapBands | null>(null);
     const [weeklyVwapBands, setWeeklyVwapBands] = useState<VwapBands | null>(null);
     const [previousVwaps, setPreviousVwaps] = useState<{ daily: number; weekly: number; monthly: number; } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const NEWS_UPDATE_INTERVAL_MS = 300000; // 5 minutes
+
+    // Effect for fetching news less frequently
+    useEffect(() => {
+        const fetchNewsData = async () => {
+            try {
+                const analysis = await fetchAndAnalyzeNews();
+                setNews(analysis);
+            } catch (err) {
+                console.error("Falha ao buscar e analisar notícias:", err);
+                // Set a fallback state for news
+                setNews({
+                    headlines: [],
+                    overallSentiment: 'Neutral',
+                    summary: 'Não foi possível carregar o sentimento das notícias.',
+                });
+            } finally {
+                setNextNewsUpdate(new Date(Date.now() + NEWS_UPDATE_INTERVAL_MS));
+            }
+        };
+
+        fetchNewsData();
+        const newsInterval = setInterval(fetchNewsData, NEWS_UPDATE_INTERVAL_MS);
+
+        return () => clearInterval(newsInterval);
+    }, []);
+
+    // Effect for fetching price and generating signals, dependent on news
     useEffect(() => {
         const fetchPriceAndGenerateSignal = async () => {
+            if (!news) return; // Wait for the first news fetch
+
             try {
                 // Fetch more daily klines for std deviation calculation
-                const [priceResponse, dailyKlineResponse, weeklyKlineResponse, monthlyKlineResponse] = await Promise.all([
+                const [priceResponse, dailyKlineResponse, weeklyKlineResponse, monthlyKlineResponse, rsiKlineResponse] = await Promise.all([
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=3'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=100'),
                 ]);
 
-                if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok) {
+                if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok || !rsiKlineResponse.ok) {
                     throw new Error(`Erro ao buscar dados da API da Binance. Verifique a conexão e os endpoints.`);
                 }
                 
@@ -318,6 +352,7 @@ const App: React.FC = () => {
                 const dailyKlineData = await dailyKlineResponse.json();
                 const weeklyKlineData = await weeklyKlineResponse.json();
                 const monthlyKlineData = await monthlyKlineResponse.json();
+                const rsiKlineData = await rsiKlineResponse.json();
                 
                 const currentPrice = parseFloat(priceData.price);
                 if (isNaN(currentPrice)) {
@@ -331,6 +366,13 @@ const App: React.FC = () => {
 
                 if (isNaN(high) || isNaN(low) || isNaN(close)) {
                     throw new Error('Formato de kline diário inválido recebido da API.');
+                }
+                
+                const rsiCloses = rsiKlineData.map((k: any) => parseFloat(k[4]));
+                const currentRsi = calculateRSI(rsiCloses);
+
+                if (currentRsi === null) {
+                    throw new Error('Não há dados suficientes para calcular o RSI.');
                 }
 
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
@@ -402,7 +444,7 @@ const App: React.FC = () => {
                 };
                 
                 if (calculatedPivots && vwap && calculatedBands && calculatedWeeklyBands && prevVwaps) {
-                  setSignal(updateAndGenerateSignal(currentPrice, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands, prevVwaps));
+                  setSignal(updateAndGenerateSignal(currentPrice, currentRsi, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands, prevVwaps, news));
                 }
                 
                 if (error) setError(null);
@@ -417,10 +459,10 @@ const App: React.FC = () => {
         };
 
         fetchPriceAndGenerateSignal();
-        const interval = setInterval(fetchPriceAndGenerateSignal, 5000);
+        const interval = setInterval(fetchPriceAndGenerateSignal, 10000); // 10 seconds for price updates
 
         return () => clearInterval(interval);
-    }, [error]);
+    }, [news, error]);
 
     return (
         <div className="min-h-screen bg-gray-900 bg-gradient-to-br from-gray-900 via-gray-900 to-slate-800 text-gray-200">
@@ -445,6 +487,7 @@ const App: React.FC = () => {
                                 <div className="flex flex-col gap-8">
                                     <SignalCard signal={signal} />
                                     <PendingOrdersCard signal={signal} />
+                                    <NewsSentimentCard news={news} nextUpdateTime={nextNewsUpdate} />
                                 </div>
                                 <div className="lg:col-span-2">
                                     <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />

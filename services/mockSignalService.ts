@@ -1,5 +1,4 @@
-
-import { SignalAction, type Signal, type PivotPoints, type VwapBands } from '../types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis } from '../types';
 
 // --- Pivot Point Calculation ---
 export const calculateClassicPivotPoints = (high: number, low: number, close: number): PivotPoints => {
@@ -38,6 +37,55 @@ export const calculateClassicPivotPoints = (high: number, low: number, close: nu
   };
 };
 
+/**
+ * Calculates the Relative Strength Index (RSI).
+ * @param closes An array of closing prices.
+ * @param period The period for RSI calculation (default 14).
+ * @returns The latest RSI value, or null if not enough data.
+ */
+export const calculateRSI = (closes: number[], period: number = 14): number | null => {
+    if (closes.length <= period) {
+        return null;
+    }
+
+    let gains = 0;
+    let losses = 0;
+
+    // Calculate initial average gains and losses
+    for (let i = 1; i <= period; i++) {
+        const diff = closes[i] - closes[i - 1];
+        if (diff >= 0) {
+            gains += diff;
+        } else {
+            losses -= diff; // losses are positive values
+        }
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+
+    // Smooth the averages for the rest of the data
+    for (let i = period + 1; i < closes.length; i++) {
+        const diff = closes[i] - closes[i - 1];
+        if (diff >= 0) {
+            avgGain = (avgGain * (period - 1) + diff) / period;
+            avgLoss = (avgLoss * (period - 1)) / period;
+        } else {
+            avgGain = (avgGain * (period - 1)) / period;
+            avgLoss = (avgLoss * (period - 1) - diff) / period;
+        }
+    }
+    
+    if (avgLoss === 0) {
+        return 100; // RSI is 100 if average loss is zero
+    }
+
+    const rs = avgGain / avgLoss;
+    const rsi = 100 - (100 / (1 + rs));
+
+    return rsi;
+};
+
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number; monthly: number; }, action: SignalAction): string[] => {
@@ -52,13 +100,11 @@ const getVwapReasons = (price: number, vwapData: { daily: number; weekly: number
 
     if (action === SignalAction.HOLD) return [];
 
-    const actionText = action === SignalAction.BUY ? 'suporte' : 'resistência';
-
     for (const level of vwapLevels) {
         if (level.value === 0) continue;
         const distance = Math.abs(price - level.value) / level.value;
         if (distance < proximityThreshold) {
-            reasons.push(`Preço testando ${actionText} na VWAP ${level.label} (${formattedPrice(level.value)})`);
+            reasons.push(`Confluência: Preço próximo à VWAP ${level.label} (${formattedPrice(level.value)})`);
         }
     }
     return reasons;
@@ -78,13 +124,11 @@ const getPreviousVwapReasons = (price: number, vwapData: { daily: number; weekly
 
     if (action === SignalAction.HOLD) return [];
 
-    const actionText = action === SignalAction.BUY ? 'suporte' : 'resistência';
-
     for (const level of vwapLevels) {
         if (level.value === 0) continue;
         const distance = Math.abs(price - level.value) / level.value;
         if (distance < proximityThreshold) {
-            reasons.push(`Preço testando ${actionText} na VWAP ${level.label} (${formattedPrice(level.value)})`);
+            reasons.push(`Confluência: Preço testando VWAP ${level.label} (${formattedPrice(level.value)})`);
         }
     }
     return reasons;
@@ -92,26 +136,12 @@ const getPreviousVwapReasons = (price: number, vwapData: { daily: number; weekly
 
 
 // --- Static Data ---
-const baseBuyReasons = [
-  "RSI < 10 indicando sobrevenda extrema",
-];
-
-const baseSellReasons = [
-  "RSI > 90 indicando sobrecompra extrema",
-];
-
 const holdReasons = [
-    "Mercado sem tendência definida.",
-    "Indicadores em conflito.",
-    "Baixa volatilidade.",
-    "Aguardando confirmação de rompimento."
+    "RSI neutro, sem indicar sobrecompra ou sobrevenda.",
+    "Mercado sem tendência definida ou preço distante de S/R chave.",
+    "Aguardando o preço testar um nível de suporte ou resistência válido.",
+    "Aguardando confirmação de rompimento ou reversão."
 ];
-
-// --- Signal State ---
-let currentSignalAction = SignalAction.HOLD;
-let signalDuration = 0; 
-
-const getRandomDuration = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 
 const findClosestLevel = (price: number, levels: { label: string; value: number }[], type: 'support' | 'resistance') => {
@@ -255,35 +285,27 @@ const determineTradingWindowAnalysis = (action: SignalAction): { start: string; 
 /**
  * Updates the internal signal state and generates a new signal object based on the provided live price, pivot points and VWAP levels.
  * @param currentPrice The live price of BTC/USD.
+ * @param rsi The calculated 14-period RSI.
  * @param pivots The calculated pivot points and fibonacci levels.
  * @param vwap The calculated VWAP levels for daily, weekly, and monthly timeframes.
  * @param vwapBands The calculated daily VWAP bands.
  * @param weeklyVwapBands The calculated weekly VWAP bands.
  * @param previousVwaps The calculated VWAP levels for the previous day, week, and month.
+ * @param newsAnalysis The AI-driven news sentiment analysis.
  * @returns A new Signal object.
  */
 export const updateAndGenerateSignal = (
-  currentPrice: number, 
+  currentPrice: number,
+  rsi: number,
   pivots: PivotPoints,
   vwap: { daily: number; weekly: number; monthly: number; },
   vwapBands: VwapBands | null,
   weeklyVwapBands: VwapBands | null,
-  previousVwaps: { daily: number; weekly: number; monthly: number; } | null
+  previousVwaps: { daily: number; weekly: number; monthly: number; } | null,
+  newsAnalysis: NewsAnalysis | null
 ): Signal => {
-  if (signalDuration <= 0) {
-    const lastAction = currentSignalAction;
-    
-    if (lastAction === SignalAction.BUY || lastAction === SignalAction.SELL) {
-        currentSignalAction = SignalAction.HOLD;
-        signalDuration = getRandomDuration(100, 200); 
-    } else { 
-        const rand = Math.random();
-        currentSignalAction = rand > 0.5 ? SignalAction.BUY : SignalAction.SELL;
-        signalDuration = getRandomDuration(500, 1000); 
-    }
-  }
-
-  let reasons: string[];
+  let currentSignalAction = SignalAction.HOLD;
+  let reasons: string[] = [];
   let entryRange;
   let triggerLevel: { label: string; value: number } | undefined = undefined;
   let touchedVwapBand: { label: string; value: number } | undefined = undefined;
@@ -292,9 +314,6 @@ export const updateAndGenerateSignal = (
   let fiboRetracementTarget: { label: string; value: number } | undefined = undefined;
   let fiboExtensionTarget: { label: string; value: number; } | undefined = undefined;
   
-  const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
-  const prevVwapReasons = getPreviousVwapReasons(currentPrice, previousVwaps, currentSignalAction);
-
   const allVwapBandLevels = [];
   if (vwapBands) {
       allVwapBandLevels.push(
@@ -331,6 +350,57 @@ export const updateAndGenerateSignal = (
     { label: 'Ret. Compra 50%', value: pivots.fiboRetBuy50 }, { label: 'Ret. Compra 61.8%', value: pivots.fiboRetBuy61 },
     { label: 'Ret. Compra 100%', value: pivots.fiboRetBuy100 }, { label: 'Ret. Compra 200%', value: pivots.fiboRetBuy200 },
   ];
+  
+  const supportLevels = [
+    { label: 'S1', value: pivots.s1 }, { label: 'S2', value: pivots.s2 }, { label: 'S3', value: pivots.s3 },
+    ...allVwapBandLevels.filter(l => l.label.includes('Compra')),
+    ...allFiboRetracementLevels.filter(l => l.label.includes('Compra')),
+  ];
+  const resistanceLevels = [
+    { label: 'R1', value: pivots.r1 }, { label: 'R2', value: pivots.r2 }, { label: 'R3', value: pivots.r3 },
+    ...allVwapBandLevels.filter(l => l.label.includes('Venda')),
+    ...allFiboRetracementLevels.filter(l => l.label.includes('Venda')),
+  ];
+
+  // --- NEW RSI-BASED TRIGGER LOGIC ---
+  if (rsi <= 30) {
+      currentSignalAction = SignalAction.BUY;
+      reasons.push(`Principal: RSI (14) em ${rsi.toFixed(2)} indica sobrevenda.`);
+      triggerLevel = findClosestLevel(currentPrice, supportLevels, 'support');
+      if (triggerLevel) {
+          reasons.push(`Confirmação: Preço próximo ao suporte ${triggerLevel.label} (${formattedPrice(triggerLevel.value)})`);
+      }
+  } else if (rsi >= 70) {
+      currentSignalAction = SignalAction.SELL;
+      reasons.push(`Principal: RSI (14) em ${rsi.toFixed(2)} indica sobrecompra.`);
+      triggerLevel = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
+      if (triggerLevel) {
+          reasons.push(`Confirmação: Preço próximo à resistência ${triggerLevel.label} (${formattedPrice(triggerLevel.value)})`);
+      }
+  }
+  // --- END NEW LOGIC ---
+
+  // --- NEWS SENTIMENT LOGIC ---
+  if (newsAnalysis && currentSignalAction !== SignalAction.HOLD) {
+    const sentiment = newsAnalysis.overallSentiment;
+    const summary = newsAnalysis.summary;
+
+    if (sentiment === 'Positive' && currentSignalAction === SignalAction.BUY) {
+      reasons.push(`Confluência (Notícias Positivas): ${summary}`);
+    } else if (sentiment === 'Negative' && currentSignalAction === SignalAction.SELL) {
+      reasons.push(`Confluência (Notícias Negativas): ${summary}`);
+    } else if (sentiment === 'Positive' && currentSignalAction === SignalAction.SELL) {
+      reasons.push(`Aviso (Notícias Positivas): ${summary}`);
+    } else if (sentiment === 'Negative' && currentSignalAction === SignalAction.BUY) {
+      reasons.push(`Aviso (Notícias Negativas): ${summary}`);
+    }
+  }
+  // --- END NEWS SENTIMENT LOGIC ---
+
+  const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
+  reasons.push(...vwapReasons);
+  const prevVwapReasons = getPreviousVwapReasons(currentPrice, previousVwaps, currentSignalAction);
+  reasons.push(...prevVwapReasons);
 
   const allFiboExtensionLevels = [
     { label: 'Ext. Compra 100%', value: pivots.fiboExtBuy100 },
@@ -343,52 +413,22 @@ export const updateAndGenerateSignal = (
   fiboRetracementTarget = findNextFiboRetracementTarget(currentPrice, allFiboRetracementLevels, currentSignalAction);
   fiboExtensionTarget = findNextFiboExtensionTarget(currentPrice, allFiboExtensionLevels, currentSignalAction);
 
-
   switch (currentSignalAction) {
     case SignalAction.BUY:
-      const supportLevels = [
-        { label: 'S1', value: pivots.s1 }, { label: 'S2', value: pivots.s2 }, { label: 'S3', value: pivots.s3 },
-        ...allFiboRetracementLevels,
-      ];
-      if (vwapBands) {
-        supportLevels.push(
-            { label: '1ª Banda Inf. (Compra)', value: vwapBands.band1.lower },
-            { label: '2ª Banda Inf. (Compra)', value: vwapBands.band2.lower },
-            { label: '3ª Banda Inf. (Compra)', value: vwapBands.band3.lower },
-            { label: '4ª Banda Inf. (Compra)', value: vwapBands.band4.lower },
-            { label: '5ª Banda Inf. (Compra)', value: vwapBands.band5.lower }
-        );
-      }
-      if (weeklyVwapBands) {
-        supportLevels.push(
-            { label: '1ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band1.lower },
-            { label: '2ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band2.lower },
-            { label: '3ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band3.lower },
-            { label: '4ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band4.lower },
-            { label: '5ª Banda Sem. Inf. (Compra)', value: weeklyVwapBands.band5.lower }
-        );
-      }
-      const closestSupport = findClosestLevel(currentPrice, supportLevels, 'support');
       const closestVwapBandSupport = findClosestVwapBand(currentPrice, supportLevels, 'support');
       const closestFiboSupport = findClosestFiboRetracement(currentPrice, supportLevels, 'support');
-      
-      reasons = [...baseBuyReasons, ...vwapReasons, ...prevVwapReasons];
-      if (closestSupport) {
-        reasons.unshift(`Preço próximo ao ${closestSupport.label} (${formattedPrice(closestSupport.value)})`);
-        triggerLevel = closestSupport;
-      }
       
       if (closestVwapBandSupport) {
         touchedVwapBand = closestVwapBandSupport;
         if (triggerLevel?.label !== touchedVwapBand.label) {
-            reasons.push(`Preço tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
+            reasons.push(`Confluência: Preço também tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
         }
       }
 
       if (closestFiboSupport) {
         touchedFiboRetracement = closestFiboSupport;
         if (triggerLevel?.label !== touchedFiboRetracement.label) {
-            reasons.push(`Preço tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
+            reasons.push(`Confluência: Preço também tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
         }
       }
 
@@ -406,49 +446,20 @@ export const updateAndGenerateSignal = (
       break;
 
     case SignalAction.SELL:
-      const resistanceLevels = [
-        { label: 'R1', value: pivots.r1 }, { label: 'R2', value: pivots.r2 }, { label: 'R3', value: pivots.r3 },
-        ...allFiboRetracementLevels,
-      ];
-      if (vwapBands) {
-        resistanceLevels.push(
-            { label: '1ª Banda Sup. (Venda)', value: vwapBands.band1.upper },
-            { label: '2ª Banda Sup. (Venda)', value: vwapBands.band2.upper },
-            { label: '3ª Banda Sup. (Venda)', value: vwapBands.band3.upper },
-            { label: '4ª Banda Sup. (Venda)', value: vwapBands.band4.upper },
-            { label: '5ª Banda Sup. (Venda)', value: vwapBands.band5.upper }
-        );
-      }
-      if (weeklyVwapBands) {
-        resistanceLevels.push(
-            { label: '1ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band1.upper },
-            { label: '2ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band2.upper },
-            { label: '3ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band3.upper },
-            { label: '4ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band4.upper },
-            { label: '5ª Banda Sem. Sup. (Venda)', value: weeklyVwapBands.band5.upper }
-        );
-      }
-       const closestResistance = findClosestLevel(currentPrice, resistanceLevels, 'resistance');
        const closestVwapBandResistance = findClosestVwapBand(currentPrice, resistanceLevels, 'resistance');
        const closestFiboResistance = findClosestFiboRetracement(currentPrice, resistanceLevels, 'resistance');
-
-      reasons = [...baseSellReasons, ...vwapReasons, ...prevVwapReasons];
-      if (closestResistance) {
-        reasons.unshift(`Preço próximo à ${closestResistance.label} (${formattedPrice(closestResistance.value)})`);
-        triggerLevel = closestResistance;
-      }
 
       if (closestVwapBandResistance) {
         touchedVwapBand = closestVwapBandResistance;
         if (triggerLevel?.label !== touchedVwapBand.label) {
-            reasons.push(`Preço tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
+            reasons.push(`Confluência: Preço também tocou a ${touchedVwapBand.label} (${formattedPrice(touchedVwapBand.value)})`);
         }
       }
 
       if (closestFiboResistance) {
         touchedFiboRetracement = closestFiboResistance;
         if (triggerLevel?.label !== touchedFiboRetracement.label) {
-            reasons.push(`Preço tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
+            reasons.push(`Confluência: Preço também tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
         }
       }
 
@@ -471,11 +482,11 @@ export const updateAndGenerateSignal = (
       break;
   }
 
-  const stopLoss = currentSignalAction === SignalAction.BUY ? entryRange.min * 0.985 : entryRange.max * 1.015;
-  const takeProfit = currentSignalAction === SignalAction.BUY ? entryRange.max * 1.03 : entryRange.min * 0.97;
-  
-  signalDuration--;
-  
+  // --- UPDATED STOP LOSS & TAKE PROFIT ---
+  // SL: 0.50%, TP: 1.50% for a 1:3 Risk/Reward ratio
+  const stopLoss = currentSignalAction === SignalAction.BUY ? currentPrice * 0.995 : currentPrice * 1.005;
+  const takeProfit = currentSignalAction === SignalAction.BUY ? currentPrice * 1.015 : currentPrice * 0.985;
+    
   const recommendedTradingWindow = determineTradingWindowAnalysis(currentSignalAction);
 
   return {

@@ -19,16 +19,12 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
             return null;
         }
 
-        const riskPercentage = 0.02; // 2% risk per trade
+        const riskPercentage = 0.01; // 1% risk per trade
         const riskAmount = balance * riskPercentage;
         
         const entryPrice = signal.currentPrice;
         const stopLossPrice = signal.stopLoss;
         const takeProfitPrice = signal.takeProfit;
-
-        const stopLoss1PercentPrice = signal.action === SignalAction.BUY 
-            ? entryPrice * 0.99 
-            : entryPrice * 1.01;
 
         const stopLossDistance = Math.abs(entryPrice - stopLossPrice);
         if (stopLossDistance === 0) return null; // Avoid division by zero
@@ -51,7 +47,6 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
             riskAmount,
             returnAmount,
             goal,
-            stopLoss1PercentPrice,
         };
     }, [signal, balance]);
 
@@ -102,18 +97,17 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                         tooltip={signal.recommendedTradingWindow.reason}
                     />
                     <InfoRow 
-                        label="Stop Loss (Sugerido)" 
+                        label="Stop Loss (Sugerido 0.50%)" 
                         value={formattedPrice(calculations.stopLossPrice)} 
                         valueClassName="text-red-400"
-                        tooltip="Stop loss sugerido pela estratégia de confluência, posicionado a ~1.5% da faixa de entrada."
+                        tooltip="Stop loss sugerido pela estratégia, posicionado a 0.50% do preço de entrada."
                     />
                     <InfoRow 
-                        label="Stop Loss (1%)" 
-                        value={formattedPrice(calculations.stopLoss1PercentPrice)} 
-                        valueClassName="text-red-400"
-                        tooltip="Stop loss mais curto, posicionado a 1% do preço de entrada atual para uma gestão de risco mais agressiva."
+                        label="Take Profit (Sugerido 1.50%)" 
+                        value={formattedPrice(calculations.takeProfitPrice)} 
+                        valueClassName="text-green-400"
+                        tooltip="Take profit sugerido para uma relação Risco/Retorno de 1:3."
                     />
-                    <InfoRow label="Take Profit (Preço)" value={formattedPrice(calculations.takeProfitPrice)} valueClassName="text-green-400" />
 
                     {signal.fiboExtensionTarget && (
                         <InfoRow
@@ -124,16 +118,16 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                         />
                     )}
                     
-                    <InfoRow label="Lote para Entrar (BTC)" value={formatNumber(calculations.lotSize, 6)} tooltip="Calculado para arriscar 2% da banca" />
+                    <InfoRow label="Lote para Entrar (BTC)" value={formatNumber(calculations.lotSize, 6)} tooltip="Calculado para arriscar 1% da banca" />
                     <InfoRow label="Alavancagem Sugerida" value={calculations.leverage} />
                     
-                    <InfoRow label="Risco na Operação" value={`${formattedPrice(calculations.riskAmount)} (2%)`} valueClassName="text-red-400" />
+                    <InfoRow label="Risco na Operação" value={`${formattedPrice(calculations.riskAmount)} (1%)`} valueClassName="text-red-400" />
                     <InfoRow label="Retorno Potencial" value={formattedPrice(calculations.returnAmount)} valueClassName="text-green-400" />
                     <InfoRow label="Meta (Dobrar a Banca)" value={formattedPrice(calculations.goal)} valueClassName="text-yellow-400 font-bold" />
                 </div>
             )}
              <p className="text-xs text-gray-500 mt-4 text-center italic">
-                *Cálculos baseados em um risco de 2% do capital por operação. Ajuste conforme sua estratégia.
+                *Cálculos baseados em um risco de 1% do capital por operação. Ajuste conforme sua estratégia.
             </p>
         </div>
     );
