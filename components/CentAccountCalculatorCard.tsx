@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { SignalAction, type Signal } from '../types';
 
@@ -117,7 +118,7 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
             riskAmount = balance * riskPercentage;
             lotSize = riskAmount / stopLossDistance;
             returnAmount = lotSize * takeProfitDistance;
-            suggestedLeverage = 10; // A low, common leverage is sufficient.
+            suggestedLeverage = 100; // Updated to 100 as requested.
         } else { // aggressive mode (dobrar banca)
             // Goal: Return amount is equal to initial balance to double the account
             returnAmount = balance; 
@@ -278,7 +279,7 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                         tooltip={
                             mode === 'aggressive'
                             ? "Alavancagem mínima sugerida para abrir a posição calculada com sua banca. Escolha este valor ou o próximo nível disponível em sua corretora."
-                            : "Uma alavancagem baixa como 1:10 é suficiente para a estratégia conservadora, pois o risco é baixo."
+                            : "Uma alavancagem baixa como 1:100 é suficiente para a estratégia conservadora, pois o risco é baixo."
                         }
                     />
                     
