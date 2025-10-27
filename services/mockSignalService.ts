@@ -128,7 +128,7 @@ const getPreviousVwapReasons = (price: number, vwapData: { daily: number; weekly
         if (level.value === 0) continue;
         const distance = Math.abs(price - level.value) / level.value;
         if (distance < proximityThreshold) {
-            reasons.push(`Confluência: Preço testando VWAP ${level.label} (${formattedPrice(level.value)})`);
+            reasons.push(`Confluência: Preço testando Preço Típico ${level.label} (${formattedPrice(level.value)})`);
         }
     }
     return reasons;
@@ -294,6 +294,8 @@ export const updateAndGenerateSignal = (
   let touchedFiboRetracement: { label: string; value: number } | undefined = undefined;
   let fiboRetracementTarget: { label: string; value: number } | undefined = undefined;
   let fiboExtensionTarget: { label: string; value: number; } | undefined = undefined;
+  let closestSupport: { label: string; value: number; } | undefined = undefined;
+  let closestResistance: { label: string; value: number; } | undefined = undefined;
   
   const allVwapBandLevels = [];
   if (vwapBands) {
@@ -460,6 +462,16 @@ export const updateAndGenerateSignal = (
     default: // HOLD
       reasons = holdReasons;
       entryRange = { min: currentPrice, max: currentPrice };
+
+      // Find closest support BELOW current price
+      closestSupport = supportLevels
+          .filter(l => l.value < currentPrice)
+          .sort((a, b) => b.value - a.value)[0];
+
+      // Find closest resistance ABOVE current price
+      closestResistance = resistanceLevels
+          .filter(l => l.value > currentPrice)
+          .sort((a, b) => a.value - b.value)[0];
       break;
   }
 
@@ -485,5 +497,7 @@ export const updateAndGenerateSignal = (
     fiboRetracementTarget,
     fiboExtensionTarget,
     recommendedHoldingPeriod,
+    closestSupport,
+    closestResistance,
   };
 };

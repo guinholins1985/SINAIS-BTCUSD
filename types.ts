@@ -40,6 +40,8 @@ export interface Signal {
     reason: string; 
     status: 'SIGNAL_ACTIVE' | 'NO_SIGNAL';
   };
+  closestSupport?: { label: string; value: number; };
+  closestResistance?: { label: string; value: number; };
 }
 
 export interface BacktestEntry {

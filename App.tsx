@@ -6,10 +6,91 @@ import { CentAccountCalculatorCard } from './components/CentAccountCalculatorCar
 import { NewsSentimentCard } from './components/NewsSentimentCard';
 import { updateAndGenerateSignal, calculateClassicPivotPoints, calculateRSI } from './services/mockSignalService';
 import { fetchAndAnalyzeNews } from './services/mockNewsService';
+import { NextD1EntryCard } from './components/NextD1EntryCard'; // Previous turn's import
+import { BuyHoldAnalysisCard } from './components/BuyHoldAnalysisCard'; // New import
 
 // --- PivotPointsCard Component and Helpers ---
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Calculates the Volume-Weighted Average Price (VWAP) from a set of klines.
+ */
+const calculateVwap = (klines: any[]): number => {
+    if (!klines || klines.length === 0) return 0;
+
+    let cumulativeTPV = 0;
+    let cumulativeVolume = 0;
+
+    for (const kline of klines) {
+        const h = parseFloat(kline[2]);
+        const l = parseFloat(kline[3]);
+        const c = parseFloat(kline[4]);
+        const volume = parseFloat(kline[5]);
+        const typicalPrice = (h + l + c) / 3;
+        
+        if (isNaN(typicalPrice) || isNaN(volume)) continue;
+
+        cumulativeTPV += typicalPrice * volume;
+        cumulativeVolume += volume;
+    }
+
+    return cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
+};
+
+/**
+ * Calculates VWAP and standard deviation bands from a set of klines.
+ */
+const calculateVwapAndBands = (klines: any[]): { vwap: number, bands: VwapBands } | null => {
+    if (klines.length < 2) return null;
+
+    let cumulativeTPV = 0;
+    let cumulativeVolume = 0;
+    const pricesForStdDev: number[] = [];
+
+    for (const kline of klines) {
+        const h = parseFloat(kline[2]);
+        const l = parseFloat(kline[3]);
+        const c = parseFloat(kline[4]);
+        const volume = parseFloat(kline[5]);
+        const typicalPrice = (h + l + c) / 3;
+        if (isNaN(typicalPrice) || isNaN(volume)) continue;
+        cumulativeTPV += typicalPrice * volume;
+        cumulativeVolume += volume;
+        pricesForStdDev.push(typicalPrice);
+    }
+
+    const vwap = cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
+
+    const mean = pricesForStdDev.reduce((a, b) => a + b, 0) / pricesForStdDev.length;
+    const squaredDiffs = pricesForStdDev.map(price => Math.pow(price - mean, 2));
+    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
+    const stdDev = Math.sqrt(avgSquaredDiff);
+
+    const bands: VwapBands = {
+        band1: { upper: vwap + (stdDev * 1), lower: vwap - (stdDev * 1) },
+        band2: { upper: vwap + (stdDev * 2), lower: vwap - (stdDev * 2) },
+        band3: { upper: vwap + (stdDev * 3), lower: vwap - (stdDev * 3) },
+        band4: { upper: vwap + (stdDev * 4), lower: vwap - (stdDev * 4) },
+        band5: { upper: vwap + (stdDev * 5), lower: vwap - (stdDev * 5) },
+    };
+
+    return { vwap, bands };
+};
+
+
+/**
+ * Calculates the typical price (H+L+C)/3 from a single kline.
+ */
+const calculateTypicalPriceFromKline = (kline: any[]): number => {
+    if (!kline || kline.length < 5) return 0;
+    const h = parseFloat(kline[2]);
+    const l = parseFloat(kline[3]);
+    const c = parseFloat(kline[4]);
+    if (isNaN(h) || isNaN(l) || isNaN(c)) return 0;
+    return (h + l + c) / 3;
+};
+
 
 const PivotLevel: React.FC<{ 
     label: string, 
@@ -332,7 +413,6 @@ const App: React.FC = () => {
     // Effect for fetching price and generating signals, dependent on news
     useEffect(() => {
         const fetchPriceAndGenerateSignal = async () => {
-            if (!news) return; // Wait for the first news fetch
 
             try {
                 // Fetch more daily klines for std deviation calculation
@@ -340,7 +420,7 @@ const App: React.FC = () => {
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=3'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=24'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=100'),
                 ]);
 
@@ -378,52 +458,6 @@ const App: React.FC = () => {
                 const calculatedPivots = calculateClassicPivotPoints(high, low, close);
                 setPivots(calculatedPivots);
                 
-                const calculateVwapAndBands = (klines: any[]): { vwap: number, bands: VwapBands } => {
-                    if (klines.length < 2) throw new Error('Dados de kline insuficientes para calcular Bandas VWAP');
-
-                    let cumulativeTPV = 0;
-                    let cumulativeVolume = 0;
-                    const pricesForStdDev: number[] = [];
-
-                    for (const kline of klines) {
-                        const h = parseFloat(kline[2]);
-                        const l = parseFloat(kline[3]);
-                        const c = parseFloat(kline[4]);
-                        const volume = parseFloat(kline[5]);
-                        const typicalPrice = (h + l + c) / 3;
-
-                        cumulativeTPV += typicalPrice * volume;
-                        cumulativeVolume += volume;
-                        pricesForStdDev.push(typicalPrice);
-                    }
-
-                    const vwap = cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
-
-                    const mean = pricesForStdDev.reduce((a, b) => a + b, 0) / pricesForStdDev.length;
-                    const squaredDiffs = pricesForStdDev.map(price => Math.pow(price - mean, 2));
-                    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
-                    const stdDev = Math.sqrt(avgSquaredDiff);
-
-                    const bands: VwapBands = {
-                        band1: { upper: vwap + (stdDev * 1), lower: vwap - (stdDev * 1) },
-                        band2: { upper: vwap + (stdDev * 2), lower: vwap - (stdDev * 2) },
-                        band3: { upper: vwap + (stdDev * 3), lower: vwap - (stdDev * 3) },
-                        band4: { upper: vwap + (stdDev * 4), lower: vwap - (stdDev * 4) },
-                        band5: { upper: vwap + (stdDev * 5), lower: vwap - (stdDev * 5) },
-                    };
-
-                    return { vwap, bands };
-                };
-                
-                const calculateTypicalPriceFromKline = (kline: any[]): number => {
-                    if (!kline || kline.length < 5) return 0;
-                    const h = parseFloat(kline[2]);
-                    const l = parseFloat(kline[3]);
-                    const c = parseFloat(kline[4]);
-                    if (isNaN(h) || isNaN(l) || isNaN(c)) return 0;
-                    return (h + l + c) / 3;
-                };
-                
                 const prevVwaps = {
                     daily: calculateTypicalPriceFromKline(dailyKlineData.length > 1 ? dailyKlineData[dailyKlineData.length - 2] : []),
                     weekly: calculateTypicalPriceFromKline(weeklyKlineData.length > 1 ? weeklyKlineData[weeklyKlineData.length - 2] : []),
@@ -431,17 +465,20 @@ const App: React.FC = () => {
                 };
                 setPreviousVwaps(prevVwaps);
 
-                const { vwap: dailyVwap, bands: calculatedBands } = calculateVwapAndBands(dailyKlineData);
-                setVwapBands(calculatedBands);
+                const dailyVwapData = calculateVwapAndBands(dailyKlineData);
+                const weeklyVwapData = calculateVwapAndBands(weeklyKlineData);
 
-                const { vwap: weeklyVwap, bands: calculatedWeeklyBands } = calculateVwapAndBands(weeklyKlineData);
-                setWeeklyVwapBands(calculatedWeeklyBands);
-
+                setVwapBands(dailyVwapData?.bands ?? null);
+                setWeeklyVwapBands(weeklyVwapData?.bands ?? null);
+                
                 const vwap = {
-                    daily: dailyVwap,
-                    weekly: weeklyVwap,
-                    monthly: calculateTypicalPriceFromKline(monthlyKlineData.length > 1 ? monthlyKlineData[monthlyKlineData.length - 1] : []),
+                    daily: dailyVwapData?.vwap ?? 0,
+                    weekly: weeklyVwapData?.vwap ?? 0,
+                    monthly: calculateVwap(monthlyKlineData),
                 };
+                
+                const calculatedBands = dailyVwapData?.bands ?? null;
+                const calculatedWeeklyBands = weeklyVwapData?.bands ?? null;
                 
                 if (calculatedPivots && vwap && calculatedBands && calculatedWeeklyBands && prevVwaps) {
                   setSignal(updateAndGenerateSignal(currentPrice, currentRsi, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands, prevVwaps, news));
@@ -486,6 +523,8 @@ const App: React.FC = () => {
                             <>
                                 <div className="flex flex-col gap-8">
                                     <SignalCard signal={signal} />
+                                    <BuyHoldAnalysisCard signal={signal} /> {/* NEW: Added strategic analysis for BUY/HOLD */}
+                                    <NextD1EntryCard signal={signal} /> {/* PREVIOUS: Added D1 entry card */}
                                     <PendingOrdersCard signal={signal} />
                                     <NewsSentimentCard news={news} nextUpdateTime={nextNewsUpdate} />
                                 </div>
