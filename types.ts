@@ -1,3 +1,4 @@
+
 // FIX: Removed a circular self-import of `SignalAction` which was causing a declaration conflict.
 
 export enum SignalAction {
@@ -8,6 +9,7 @@ export enum SignalAction {
 
 // Added for News Sentiment feature
 export type NewsSentiment = 'Positive' | 'Negative' | 'Neutral';
+export type HeikinAshiColor = 'Green' | 'Red' | 'Neutral'; // NEW: Heikin-Ashi color type
 
 export interface NewsHeadline {
   title: string;
@@ -42,6 +44,7 @@ export interface Signal {
   };
   closestSupport?: { label: string; value: number; };
   closestResistance?: { label: string; value: number; };
+  heikinAshiColor?: HeikinAshiColor; // NEW: Add Heikin-Ashi color to signal
 }
 
 export interface BacktestEntry {

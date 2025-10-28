@@ -2,48 +2,48 @@ import { SignalAction, type BacktestEntry } from './types';
 
 export const BACKTEST_DATA: BacktestEntry[] = [
   {
-    date: '2025-07-15',
-    price: '$62,100',
+    date: '2023-10-20',
+    price: '$30,100',
     rsiDaily: 28,
-    vwapDaily: '$62,500',
-    vwapWeekly: '$63,000',
-    mm80: '$60,000',
-    vwapBand5: '$60,500',
+    vwapDaily: '$30,500',
+    vwapWeekly: '$31,000',
+    mm80: '$29,000',
+    vwapBand5: '$28,500',
     signal: SignalAction.BUY,
-    result: '+18% em 6 semanas'
+    result: '+130% em 5 meses'
   },
   {
-    date: '2025-09-01',
-    price: '$73,500',
-    rsiDaily: 75,
-    vwapDaily: '$73,000',
-    vwapWeekly: '$71,000',
+    date: '2024-03-14',
+    price: '$73,100',
+    rsiDaily: 78,
+    vwapDaily: '$72,800',
+    vwapWeekly: '$71,500',
     mm80: '$68,000',
     vwapBand5: '$75,000',
     signal: SignalAction.SELL,
-    result: 'Fechado em $65,000'
+    result: 'Fechado em $61,000'
   },
    {
-    date: '2025-03-10',
-    price: '$45,000',
-    rsiDaily: 25,
-    vwapDaily: '$45,500',
-    vwapWeekly: '$46,100',
-    mm80: '$43,800',
-    vwapBand5: '$43,000',
+    date: '2024-04-18',
+    price: '$61,500',
+    rsiDaily: 30,
+    vwapDaily: '$62,000',
+    vwapWeekly: '$63,100',
+    mm80: '$60,800',
+    vwapBand5: '$59,000',
     signal: SignalAction.BUY,
-    result: '+25% em 2 meses'
+    result: '+15% em 4 semanas'
   },
   {
-    date: '2025-05-20',
-    price: '$56,500',
-    rsiDaily: 78,
-    vwapDaily: '$56,000',
-    vwapWeekly: '$54,500',
-    mm80: '$51,200',
-    vwapBand5: '$58,000',
+    date: '2024-05-21',
+    price: '$71,200',
+    rsiDaily: 75,
+    vwapDaily: '$70,900',
+    vwapWeekly: '$69,500',
+    mm80: '$67,200',
+    vwapBand5: '$72,500',
     signal: SignalAction.SELL,
-    result: '+12% em 5 semanas (short)'
+    result: '+10% em 3 semanas (short)'
   },
 ];
 

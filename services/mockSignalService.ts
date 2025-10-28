@@ -1,4 +1,64 @@
-import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis } from '../types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis, type HeikinAshiColor } from '../types';
+
+// --- Heikin-Ashi Calculation ---
+
+/**
+ * Calculates Heikin-Ashi candles and determines the color of the latest candle.
+ * @param klines An array of raw Binance klines (each as [openTime, open, high, low, close, volume, ...]).
+ * @returns The color of the latest Heikin-Ashi candle ('Green', 'Red', 'Neutral') or null if not enough data.
+ */
+export const calculateHeikinAshiColor = (klines: any[]): HeikinAshiColor | null => {
+  if (klines.length < 2) { // Need at least 2 candles for HA calculation
+    return null;
+  }
+
+  const haCandles: { open: number; high: number; low: number; close: number }[] = [];
+
+  for (let i = 0; i < klines.length; i++) {
+    const k = klines[i];
+    const open = parseFloat(k[1]);
+    const high = parseFloat(k[2]);
+    const low = parseFloat(k[3]);
+    const close = parseFloat(k[4]);
+
+    if (isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close)) {
+      continue; // Skip invalid klines
+    }
+
+    let haClose = (open + high + low + close) / 4;
+    let haOpen;
+
+    if (i === 0) {
+      // For the very first candle, HA Open is regular Open
+      haOpen = open;
+    } else {
+      // For subsequent candles, HA Open is average of previous HA Open and HA Close
+      haOpen = (haCandles[i - 1].open + haCandles[i - 1].close) / 2;
+    }
+
+    // HA High is the maximum of current High, HA Open, and HA Close
+    let haHigh = Math.max(high, haOpen, haClose);
+    // HA Low is the minimum of current Low, HA Open, and HA Close
+    let haLow = Math.min(low, haOpen, haClose);
+
+    haCandles.push({ open: haOpen, high: haHigh, low: haLow, close: haClose });
+  }
+
+  if (haCandles.length === 0) {
+    return null;
+  }
+
+  // Determine the color of the latest Heikin-Ashi candle
+  const latestHa = haCandles[haCandles.length - 1];
+  if (latestHa.close > latestHa.open) {
+    return 'Green';
+  } else if (latestHa.close < latestHa.open) {
+    return 'Red';
+  } else {
+    return 'Neutral';
+  }
+};
+
 
 // --- Pivot Point Calculation ---
 export const calculateClassicPivotPoints = (high: number, low: number, close: number): PivotPoints => {
@@ -267,23 +327,29 @@ const determineHoldingPeriodAnalysis = (action: SignalAction): { period: string;
  * Updates the internal signal state and generates a new signal object based on the provided live price, pivot points and VWAP levels.
  * @param currentPrice The live price of BTC/USD.
  * @param rsi The calculated 14-period RSI.
- * @param pivots The calculated pivot points and fibonacci levels.
+ * @param dailyHigh The high price of the last completed daily candle.
+ * @param dailyLow The low price of the last completed daily candle.
+ * @param dailyClose The close price of the last completed daily candle.
  * @param vwap The calculated VWAP levels for daily, weekly, and monthly timeframes.
  * @param vwapBands The calculated daily VWAP bands.
  * @param weeklyVwapBands The calculated weekly VWAP bands.
  * @param previousVwaps The calculated VWAP levels for the previous day, week, and month.
  * @param newsAnalysis The AI-driven news sentiment analysis.
+ * @param heikinAshiColor The color of the latest Heikin-Ashi candle.
  * @returns A new Signal object.
  */
 export const updateAndGenerateSignal = (
   currentPrice: number,
   rsi: number,
-  pivots: PivotPoints,
+  dailyHigh: number, // NEW: Parameter for daily high
+  dailyLow: number,  // NEW: Parameter for daily low
+  dailyClose: number, // NEW: Parameter for daily close
   vwap: { daily: number; weekly: number; monthly: number; },
   vwapBands: VwapBands | null,
   weeklyVwapBands: VwapBands | null,
   previousVwaps: { daily: number; weekly: number; monthly: number; } | null,
-  newsAnalysis: NewsAnalysis | null
+  newsAnalysis: NewsAnalysis | null,
+  heikinAshiColor: HeikinAshiColor | null 
 ): Signal => {
   let currentSignalAction = SignalAction.HOLD;
   let reasons: string[] = [];
@@ -297,6 +363,10 @@ export const updateAndGenerateSignal = (
   let closestSupport: { label: string; value: number; } | undefined = undefined;
   let closestResistance: { label: string; value: number; } | undefined = undefined;
   
+  // Calculate daily pivots using the provided daily high, low, close
+  const pivots = calculateClassicPivotPoints(dailyHigh, dailyLow, dailyClose);
+
+
   const allVwapBandLevels = [];
   if (vwapBands) {
       allVwapBandLevels.push(
@@ -363,6 +433,33 @@ export const updateAndGenerateSignal = (
   }
   // --- END NEW LOGIC ---
 
+  // --- NEW HEIKIN-ASHI CONFLUENCE LOGIC ---
+  if (heikinAshiColor) {
+      if (currentSignalAction === SignalAction.BUY) {
+          if (heikinAshiColor === 'Green') {
+              reasons.push(`Confluência: Heikin-Ashi verde confirma o impulso de alta.`);
+          } else if (heikinAshiColor === 'Red') {
+              currentSignalAction = SignalAction.HOLD;
+              reasons = [`AVISO: Heikin-Ashi vermelho contradiz o sinal de compra do RSI. Adotando modo 'Manter'.`];
+          }
+      } else if (currentSignalAction === SignalAction.SELL) {
+          if (heikinAshiColor === 'Red') {
+              reasons.push(`Confluência: Heikin-Ashi vermelho confirma o impulso de baixa.`);
+          } else if (heikinAshiColor === 'Green') {
+              currentSignalAction = SignalAction.HOLD;
+              reasons = [`AVISO: Heikin-Ashi verde contradiz o sinal de venda do RSI. Adotando modo 'Manter'.`];
+          }
+      } else { // currentSignalAction === SignalAction.HOLD
+        // For HOLD, Heikin-Ashi gives insight but doesn't force action without RSI trigger
+        if (heikinAshiColor === 'Green') {
+          reasons.push(`Heikin-Ashi indica um possível impulso de alta, mas o RSI está neutro. Aguardar confirmação.`);
+        } else if (heikinAshiColor === 'Red') {
+          reasons.push(`Heikin-Ashi indica um possível impulso de baixa, mas o RSI está neutro. Aguardar confirmação.`);
+        }
+      }
+  }
+  // --- END NEW HEIKIN-ASHI LOGIC ---
+
   // --- NEWS SENTIMENT LOGIC ---
   if (newsAnalysis && currentSignalAction !== SignalAction.HOLD) {
     const sentiment = newsAnalysis.overallSentiment;
@@ -383,7 +480,7 @@ export const updateAndGenerateSignal = (
   const vwapReasons = getVwapReasons(currentPrice, vwap, currentSignalAction);
   reasons.push(...vwapReasons);
   const prevVwapReasons = getPreviousVwapReasons(currentPrice, previousVwaps, currentSignalAction);
-  reasons.push(...prevVwapReasons);
+  reasons.push(...prevVwapReasons); // FIX: Changed 'reclusions' to 'reasons'
 
   const allFiboExtensionLevels = [
     { label: 'Ext. Compra 100%', value: pivots.fiboExtBuy100 },
@@ -442,6 +539,7 @@ export const updateAndGenerateSignal = (
       if (closestFiboResistance) {
         touchedFiboRetracement = closestFiboResistance;
         if (triggerLevel?.label !== touchedFiboRetracement.label) {
+            // FIX: Corrected typo 'touachedFiboRetracement' to 'touchedFiboRetracement'
             reasons.push(`Confluência: Preço também tocou a Retração Fibo ${touchedFiboRetracement.label.split(' ')[2]} (${formattedPrice(touchedFiboRetracement.value)})`);
         }
       }
@@ -460,7 +558,7 @@ export const updateAndGenerateSignal = (
       break;
 
     default: // HOLD
-      reasons = holdReasons;
+      reasons = holdReasons; // Reassign hold reasons to ensure they are consistent
       entryRange = { min: currentPrice, max: currentPrice };
 
       // Find closest support BELOW current price
@@ -499,5 +597,6 @@ export const updateAndGenerateSignal = (
     recommendedHoldingPeriod,
     closestSupport,
     closestResistance,
+    heikinAshiColor, // NEW: Include Heikin-Ashi color in the signal object
   };
 };

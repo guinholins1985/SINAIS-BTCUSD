@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SignalAction, type Signal } from '../types';
 import { ArrowTrendingUpIcon, PauseIcon } from './icons';
@@ -30,7 +31,7 @@ export const BuyHoldAnalysisCard: React.FC<BuyHoldAnalysisCardProps> = ({ signal
 
   let analysisText = '';
   if (isBuy) {
-    analysisText = `O mercado de BTC/USD apresenta condições favoráveis para uma entrada de compra, com múltiplos indicadores alinhados a uma potencial valorização. Aconselha-se monitorar a faixa de entrada sugerida para maximizar o potencial de ganho. Mantenha a paciência para os alvos de lucro.`;
+    analysisText = `O mercado de BTC/USD apresenta condições favoráveis para uma entrada de compra em ${formattedPrice(signal.entryRange.min)}, com múltiplos indicadores alinhados a uma potencial valorização. Aconselha-se monitorar a faixa de entrada sugerida para maximizar o potencial de ganho. Mantenha a paciência para os alvos de lucro.`;
   } else { // HOLD
     analysisText = `No momento, o mercado de BTC/USD demonstra indecisão, sem um sinal claro de compra ou venda forte. Recomenda-se cautela e a observação atenta dos níveis de suporte e resistência para identificar uma futura oportunidade de entrada ou saída, ou para uma estratégia de ordens limite em níveis chave.`;
   }

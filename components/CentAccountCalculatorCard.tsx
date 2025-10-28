@@ -1,10 +1,10 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { SignalAction, type Signal } from '../types';
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const formatNumber = (n: number, decimals = 8) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: decimals });
+// Adjusted formatNumber to allow specifying min and max fraction digits
+const formatNumber = (n: number, minDecimals: number = 2, maxDecimals: number = 8) => n.toLocaleString('pt-BR', { minimumFractionDigits: minDecimals, maximumFractionDigits: maxDecimals });
 
 const InfoRow: React.FC<{ label: string, value: string | number, valueClassName?: string, tooltip?: string }> = ({ label, value, valueClassName = 'text-white', tooltip }) => (
     <div className="flex justify-between items-center py-2 border-b border-gray-700/50">
@@ -78,7 +78,7 @@ const HoldSuggestion: React.FC<{
             <InfoRow label="Take Profit (Alvo)" value={formattedPrice(calculations.takeProfitPrice)} valueClassName="text-green-400" />
             <InfoRow label="Alvo em" value={targetLevel ? targetLevel.label : '-'} />
             <hr className="border-gray-700 my-2" />
-            <InfoRow label="Lote para Entrar (BTC)" value={formatNumber(calculations.lotSize, 6)} tooltip="Calculado para arriscar 1% da banca" />
+            <InfoRow label="Lote para Entrar (BTC)" value={formatNumber(calculations.lotSize, 6, 6)} tooltip="Calculado para arriscar 1% da banca" />
             <InfoRow 
                 label="Alavancagem Sugerida" 
                 value={`1:${calculations.suggestedLeverage}`} 
@@ -108,29 +108,31 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
         const stopLossDistance = Math.abs(entryPrice - stopLossPrice);
         const takeProfitDistance = Math.abs(takeProfitPrice - entryPrice);
 
-        if (stopLossDistance === 0 || takeProfitDistance === 0) return null; // Avoid division by zero
+        if (stopLossDistance === 0 || takeProfitDistance === 0) return null; // Evita divisão por zero
 
         let lotSize, riskAmount, returnAmount, suggestedLeverage;
         const goal = balance * 2;
 
         if (mode === 'conservative') {
-            const riskPercentage = 0.01; // 1% risk per trade
+            const riskPercentage = 0.01; // 1% risco por operação
             riskAmount = balance * riskPercentage;
             lotSize = riskAmount / stopLossDistance;
             returnAmount = lotSize * takeProfitDistance;
-            suggestedLeverage = 100; // Updated to 100 as requested.
+            suggestedLeverage = 100; // Alavancagem padrão de 1:100 para conservador.
         } else { // aggressive mode (dobrar banca)
-            // Goal: Return amount is equal to initial balance to double the account
+            // Para dobrar a banca, o retorno deve ser igual ao valor da banca inicial.
             returnAmount = balance; 
+            // Calcula o tamanho do lote necessário para atingir este 'returnAmount' dada a 'takeProfitDistance'.
             lotSize = returnAmount / takeProfitDistance;
+            // O valor de risco é então uma consequência deste tamanho de lote calculado.
             riskAmount = lotSize * stopLossDistance;
             
-            // Calculate appropriate leverage for aggressive mode
+            // Calcula a alavancagem apropriada
             const positionValue = lotSize * entryPrice;
             suggestedLeverage = 1;
             if (positionValue > balance) {
                 const minLeverage = positionValue / balance;
-                // Find the next common tier, or calculate a close-enough value.
+                // Encontra o próximo nível de alavancagem comum, ou calcula um valor próximo.
                 const tiers = [10, 20, 25, 50, 100, 200, 500];
                 const foundTier = tiers.find(tier => tier >= minLeverage);
                 suggestedLeverage = foundTier || Math.ceil(minLeverage);
@@ -154,7 +156,7 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
     const getHoldingPeriodStatusColor = (status: 'SIGNAL_ACTIVE' | 'NO_SIGNAL' | undefined) => {
         switch (status) {
             case 'SIGNAL_ACTIVE': return 'text-cyan-400';
-            default: return 'text-gray-400'; // NO_SIGNAL or undefined
+            default: return 'text-gray-400'; // NO_SIGNAL ou undefined
         }
     };
 
@@ -270,7 +272,7 @@ export const CentAccountCalculatorCard: React.FC<{ signal: Signal | null }> = ({
                     
                     <InfoRow 
                         label="Lote para Entrar (BTC)" 
-                        value={formatNumber(calculations.lotSize, 6)} 
+                        value={formatNumber(calculations.lotSize, 6, 6)} // Fixed to 6 decimal places for clarity
                         tooltip="Volume de Bitcoin necessário para abrir a posição com o risco/retorno selecionado." 
                     />
                     <InfoRow 

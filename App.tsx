@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis } from './types';
+import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis, type HeikinAshiColor } from './types';
 import { SignalCard } from './components/SignalCard';
 import { PendingOrdersCard } from './components/PendingOrdersCard';
 import { CentAccountCalculatorCard } from './components/CentAccountCalculatorCard';
 import { NewsSentimentCard } from './components/NewsSentimentCard';
-import { updateAndGenerateSignal, calculateClassicPivotPoints, calculateRSI } from './services/mockSignalService';
+import { updateAndGenerateSignal, calculateClassicPivotPoints, calculateRSI, calculateHeikinAshiColor } from './services/mockSignalService'; 
 import { fetchAndAnalyzeNews } from './services/mockNewsService';
-import { NextD1EntryCard } from './components/NextD1EntryCard'; // Previous turn's import
-import { BuyHoldAnalysisCard } from './components/BuyHoldAnalysisCard'; // New import
+import { NextD1EntryCard } from './components/NextD1EntryCard';
+import { BuyHoldAnalysisCard } from './components/BuyHoldAnalysisCard';
 
 // --- PivotPointsCard Component and Helpers ---
 
@@ -269,14 +269,14 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
-      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave Semanais</h3>
+      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave Diários</h3> {/* UPDATED: Title changed to daily */}
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
         <div className="w-full lg:w-1/2 flex-shrink-0">
-          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points (Semanal)</h4>
+          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points (Diário)</h4> {/* UPDATED: Title changed to daily */}
           {renderLevelList(pivotLevels)}
-           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci (Semanal)</h4>
+           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci (Diário)</h4> {/* UPDATED: Title changed to daily */}
           {renderLevelList(fiboRetracementLevels)}
-          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci (Semanal)</h4>
+          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci (Diário)</h4> {/* UPDATED: Title changed to daily */}
           {renderLevelList(fiboExtensionLevels)}
           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Bandas VWAP (Diário)</h4>
           {renderLevelList(vwapBandLevels)}
@@ -381,6 +381,7 @@ const App: React.FC = () => {
     const [vwapBands, setVwapBands] = useState<VwapBands | null>(null);
     const [weeklyVwapBands, setWeeklyVwapBands] = useState<VwapBands | null>(null);
     const [previousVwaps, setPreviousVwaps] = useState<{ daily: number; weekly: number; monthly: number; } | null>(null);
+    const [heikinAshiColor, setHeikinAshiColor] = useState<HeikinAshiColor | null>(null); 
     const [error, setError] = useState<string | null>(null);
 
     const NEWS_UPDATE_INTERVAL_MS = 300000; // 5 minutes
@@ -415,13 +416,12 @@ const App: React.FC = () => {
         const fetchPriceAndGenerateSignal = async () => {
 
             try {
-                // Fetch more daily klines for std deviation calculation
                 const [priceResponse, dailyKlineResponse, weeklyKlineResponse, monthlyKlineResponse, rsiKlineResponse] = await Promise.all([
                     fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=80'), 
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=80'),
                     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1M&limit=24'),
-                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=100'),
+                    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=100'), 
                 ]);
 
                 if (!priceResponse.ok || !dailyKlineResponse.ok || !weeklyKlineResponse.ok || !monthlyKlineResponse.ok || !rsiKlineResponse.ok) {
@@ -439,13 +439,17 @@ const App: React.FC = () => {
                     throw new Error('Formato de preço inválido recebido da API.');
                 }
                 
-                const prevWeekKline = weeklyKlineData[weeklyKlineData.length - 2];
-                const high = parseFloat(prevWeekKline[2]);
-                const low = parseFloat(prevWeekKline[3]);
-                const close = parseFloat(prevWeekKline[4]);
+                // Get the last completed daily kline for pivot calculation
+                const lastCompletedDailyKline = dailyKlineData[dailyKlineData.length - 2];
+                if (!lastCompletedDailyKline) {
+                    throw new Error('Não há dados diários suficientes para calcular Pivot Points.');
+                }
+                const dailyHigh = parseFloat(lastCompletedDailyKline[2]);
+                const dailyLow = parseFloat(lastCompletedDailyKline[3]);
+                const dailyClose = parseFloat(lastCompletedDailyKline[4]);
 
-                if (isNaN(high) || isNaN(low) || isNaN(close)) {
-                    throw new Error('Formato de kline semanal inválido recebido da API.');
+                if (isNaN(dailyHigh) || isNaN(dailyLow) || isNaN(dailyClose)) {
+                    throw new Error('Formato de kline diária inválido recebido da API para cálculo de Pivot Points.');
                 }
                 
                 const rsiCloses = rsiKlineData.map((k: any) => parseFloat(k[4]));
@@ -455,7 +459,8 @@ const App: React.FC = () => {
                     throw new Error('Não há dados suficientes para calcular o RSI diário.');
                 }
 
-                const calculatedPivots = calculateClassicPivotPoints(high, low, close);
+                // Calculate pivots using the last completed daily kline
+                const calculatedPivots = calculateClassicPivotPoints(dailyHigh, dailyLow, dailyClose);
                 setPivots(calculatedPivots);
                 
                 const prevVwaps = {
@@ -476,12 +481,27 @@ const App: React.FC = () => {
                     weekly: weeklyVwapData?.vwap ?? 0,
                     monthly: calculateVwap(monthlyKlineData),
                 };
+
+                const haColor = calculateHeikinAshiColor(dailyKlineData);
+                setHeikinAshiColor(haColor);
                 
                 const calculatedBands = dailyVwapData?.bands ?? null;
                 const calculatedWeeklyBands = weeklyVwapData?.bands ?? null;
                 
                 if (calculatedPivots && vwap && calculatedBands && calculatedWeeklyBands && prevVwaps) {
-                  setSignal(updateAndGenerateSignal(currentPrice, currentRsi, calculatedPivots, vwap, calculatedBands, calculatedWeeklyBands, prevVwaps, news));
+                  setSignal(updateAndGenerateSignal(
+                    currentPrice, 
+                    currentRsi, 
+                    dailyHigh, // NEW: Pass daily high
+                    dailyLow,  // NEW: Pass daily low
+                    dailyClose, // NEW: Pass daily close
+                    vwap, 
+                    calculatedBands, 
+                    calculatedWeeklyBands, 
+                    prevVwaps, 
+                    news, 
+                    haColor
+                  ));
                 }
                 
                 if (error) setError(null);
@@ -499,7 +519,7 @@ const App: React.FC = () => {
         const interval = setInterval(fetchPriceAndGenerateSignal, 10000); // 10 seconds for price updates
 
         return () => clearInterval(interval);
-    }, [news, error]);
+    }, [news, error]); 
 
     return (
         <div className="min-h-screen bg-gray-900 bg-gradient-to-br from-gray-900 via-gray-900 to-slate-800 text-gray-200">
@@ -523,8 +543,8 @@ const App: React.FC = () => {
                             <>
                                 <div className="flex flex-col gap-8">
                                     <SignalCard signal={signal} />
-                                    <BuyHoldAnalysisCard signal={signal} /> {/* NEW: Added strategic analysis for BUY/HOLD */}
-                                    <NextD1EntryCard signal={signal} /> {/* PREVIOUS: Added D1 entry card */}
+                                    <BuyHoldAnalysisCard signal={signal} />
+                                    <NextD1EntryCard signal={signal} />
                                     <PendingOrdersCard signal={signal} />
                                     <NewsSentimentCard news={news} nextUpdateTime={nextNewsUpdate} />
                                 </div>
