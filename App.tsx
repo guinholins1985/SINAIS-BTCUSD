@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { SignalAction, type Signal, type PivotPoints, type VwapBands, type NewsAnalysis, type HeikinAshiColor } from './types';
 import { SignalCard } from './components/SignalCard';
-import { PendingOrdersCard } from './components/PendingOrdersCard';
 import { CentAccountCalculatorCard } from './components/CentAccountCalculatorCard';
 import { NewsSentimentCard } from './components/NewsSentimentCard';
 import { updateAndGenerateSignal, calculateClassicPivotPoints, calculateRSI, calculateHeikinAshiColor } from './services/mockSignalService'; 
 import { fetchAndAnalyzeNews } from './services/mockNewsService';
 import { NextD1EntryCard } from './components/NextD1EntryCard';
 import { BuyHoldAnalysisCard } from './components/BuyHoldAnalysisCard';
+import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, PauseIcon } from './components/icons';
+import { PivotAndOrdersCard } from './components/PivotAndOrdersCard'; // NEW: Import PivotAndOrdersCard
+
 
 // --- PivotPointsCard Component and Helpers ---
 
@@ -96,8 +98,9 @@ const PivotLevel: React.FC<{
     label: string, 
     value: number, 
     color: string, 
-    highlight?: 'trigger' | 'touched' | 'target'
-}> = ({ label, value, color, highlight }) => {
+    highlight?: 'trigger' | 'touched' | 'target',
+    currentPrice?: number; // New prop for central pivot direction
+}> = ({ label, value, color, highlight, currentPrice }) => {
     
     const highlightStyles = {
         trigger: {
@@ -125,17 +128,38 @@ const PivotLevel: React.FC<{
 
     const styles = highlight ? highlightStyles[highlight] : null;
 
+    let directionIcon = null;
+    let directionColor = '';
+
+    if (label === 'P' && currentPrice !== undefined) {
+        const priceDifference = currentPrice - value;
+        const threshold = value * 0.0005; // 0.05% threshold for 'neutral'
+
+        if (priceDifference > threshold) {
+            directionIcon = <ArrowTrendingUpIcon className="h-4 w-4 text-green-400" />;
+            directionColor = 'text-green-400';
+        } else if (priceDifference < -threshold) {
+            directionIcon = <ArrowTrendingDownIcon className="h-4 w-4 text-red-400" />;
+            directionColor = 'text-red-400';
+        } else {
+            directionIcon = <PauseIcon className="h-4 w-4 text-gray-400" />;
+            directionColor = 'text-gray-400';
+        }
+    }
+
+
     return (
         <div className={`flex justify-between items-center py-1 text-sm rounded px-2 ${styles ? styles.wrapper : ''}`}>
             <div className="flex items-center gap-2">
-                <span className={`font-semibold ${styles ? styles.label : color}`}>{label}</span>
+                <span className={`font-semibold ${styles ? styles.label : color} ${directionColor}`}>{label}</span>
+                {directionIcon}
                 {styles && (
                     <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${styles.badgeClasses}`}>
                         {styles.badgeText}
                     </span>
                 )}
             </div>
-            <span className={`font-mono ${styles ? styles.value : 'text-gray-300'}`}>{formattedPrice(value)}</span>
+            <span className={`font-mono ${styles ? styles.value : 'text-gray-300'} ${directionColor}`}>{formattedPrice(value)}</span>
         </div>
     );
 };
@@ -163,6 +187,9 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
     fiboRetSell50, fiboRetSell61, fiboRetSell100, fiboRetSell200,
     fiboExtBuy100, fiboExtBuy200, fiboExtSell100, fiboExtSell200
   } = pivots;
+
+  // The findNextPivotTarget logic is now moved to PivotAnalysisCard for comprehensive analysis.
+  // We keep the simple directional icon for 'P' in PivotLevel.
 
   const pivotLevels = [
     { label: 'R3', value: r3, color: 'text-red-500' },
@@ -248,7 +275,14 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
               highlightType = 'target';
           }
           
-          return <PivotLevel key={level.label} {...level} highlight={highlightType} />;
+          return (
+            <PivotLevel 
+              key={level.label} 
+              {...level} 
+              highlight={highlightType} 
+              currentPrice={level.label === 'P' ? currentPrice : undefined} // Pass currentPrice only for 'P'
+            />
+          );
       });
   };
 
@@ -269,14 +303,14 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl p-6">
-      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave Diários</h3> {/* UPDATED: Title changed to daily */}
+      <h3 className="text-xl font-bold text-white mb-4">Níveis Chave Diários</h3>
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-6 lg:items-center">
         <div className="w-full lg:w-1/2 flex-shrink-0">
-          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points (Diário)</h4> {/* UPDATED: Title changed to daily */}
+          <h4 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Pivot Points (Diário)</h4>
           {renderLevelList(pivotLevels)}
-           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci (Diário)</h4> {/* UPDATED: Title changed to daily */}
+           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Retração Fibonacci (Diário)</h4>
           {renderLevelList(fiboRetracementLevels)}
-          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci (Diário)</h4> {/* UPDATED: Title changed to daily */}
+          <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Extensão Fibonacci (Diário)</h4>
           {renderLevelList(fiboExtensionLevels)}
           <h4 className="text-xs font-bold text-gray-400 mt-3 mb-1 uppercase tracking-wider">Bandas VWAP (Diário)</h4>
           {renderLevelList(vwapBandLevels)}
@@ -327,7 +361,8 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
                 <div className={`absolute left-0 right-0 bottom-0 h-px ${rangeBorderClasses} opacity-60`}></div>
 
                 <div 
-                  className={`absolute top-full mt-4 left-1/2 -translate-x-1/2 w-max p-2 rounded-md border ${rangeLabelBorder} bg-gray-900/60 backdrop-blur-sm shadow-xl`}
+                  className="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-max p-2 rounded-md border bg-gray-900/60 backdrop-blur-sm shadow-xl"
+                  style={{ borderColor: rangeLabelBorder.split('-')[1]}} // Extract color from rangeLabelBorder
                 >
                   <p className={`text-xs font-semibold ${rangeTextColor} mb-1 text-center uppercase tracking-wider`}>
                     {isBuySignal ? 'Zona de Compra' : 'Zona de Venda'}
@@ -545,11 +580,13 @@ const App: React.FC = () => {
                                     <SignalCard signal={signal} />
                                     <BuyHoldAnalysisCard signal={signal} />
                                     <NextD1EntryCard signal={signal} />
-                                    <PendingOrdersCard signal={signal} />
                                     <NewsSentimentCard news={news} nextUpdateTime={nextNewsUpdate} />
                                 </div>
-                                <div className="lg:col-span-2">
+                                <div className="lg:col-span-2 flex flex-col gap-8"> {/* Adjusted to allow gap */}
                                     <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />
+                                    {pivots && signal && ( 
+                                        <PivotAndOrdersCard pivots={pivots} signal={signal} /> {/* NEW: Render PivotAndOrdersCard */}
+                                    )}
                                 </div>
                                 <div className="lg:col-span-3">
                                     <CentAccountCalculatorCard signal={signal} />
