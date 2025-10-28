@@ -169,10 +169,12 @@ interface PivotPointsCardProps {
   signal: Signal | null;
   vwapBands: VwapBands | null;
   weeklyVwapBands: VwapBands | null;
+  lastDailyHigh: number | null; // NEW: last daily high
+  lastDailyLow: number | null;  // NEW: last daily low
 }
 
-const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapBands, weeklyVwapBands }) => {
-  if (!pivots || !signal || !vwapBands || !weeklyVwapBands) {
+const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapBands, weeklyVwapBands, lastDailyHigh, lastDailyLow }) => {
+  if (!pivots || !signal || !vwapBands || !weeklyVwapBands || lastDailyHigh === null || lastDailyLow === null) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 flex justify-center items-center h-full min-h-[420px]">
         <p className="text-gray-400">Calculando Níveis Chave...</p>
@@ -181,6 +183,8 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
   }
 
   const { currentPrice } = signal;
+  // const touchedThreshold = currentPrice * 0.0002; // REMOVED: No longer used for "touched today"
+
 
   const { r3, r2, r1, p, s1, s2, s3, 
     fiboRetBuy50, fiboRetBuy61, fiboRetBuy100, fiboRetBuy200,
@@ -264,12 +268,15 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
           const isTargetVwap = signal.vwapBandTarget?.label === level.label;
           const isTouchedFibo = signal.touchedFiboRetracement?.label === level.label;
           const isTargetFibo = signal.fiboRetracementTarget?.label === level.label;
+          
+          // NEW: Check if the level was touched during the last completed daily candle
+          const isTouchedToday = lastDailyLow !== null && lastDailyHigh !== null && level.value >= lastDailyLow && level.value <= lastDailyHigh;
 
           let highlightType: 'trigger' | 'touched' | 'target' | undefined = undefined;
 
           if (isTrigger) {
               highlightType = 'trigger';
-          } else if (isTouchedVwap || isTouchedFibo) {
+          } else if (isTouchedVwap || isTouchedFibo || isTouchedToday) { // Use isTouchedToday
               highlightType = 'touched';
           } else if (isTargetVwap || isTargetFibo) {
               highlightType = 'target';
@@ -325,18 +332,25 @@ const PivotPointsCard: React.FC<PivotPointsCardProps> = ({ pivots, signal, vwapB
               const isTargetVwap = signal.vwapBandTarget?.label === level.label;
               const isTouchedFibo = signal.touchedFiboRetracement?.label === level.label;
               const isTargetFibo = signal.fiboRetracementTarget?.label === level.label;
+              
+              // NEW: Check if the level was touched during the last completed daily candle
+              const isTouchedToday = lastDailyLow !== null && lastDailyHigh !== null && level.value >= lastDailyLow && level.value <= lastDailyHigh;
 
 
               let highlightColor = 'bg-gray-500';
+              let isHighlighted = false;
+
               if (isTrigger) {
                   highlightColor = 'bg-cyan-400 shadow-lg shadow-cyan-500/50';
-              } else if (isTouchedVwap || isTouchedFibo) {
+                  isHighlighted = true;
+              } else if (isTouchedVwap || isTouchedFibo || isTouchedToday) { // Use isTouchedToday
                   highlightColor = 'bg-yellow-400 shadow-lg shadow-yellow-500/50';
+                  isHighlighted = true;
               } else if (isTargetVwap || isTargetFibo) {
                   highlightColor = 'bg-purple-400 shadow-lg shadow-purple-500/50';
+                  isHighlighted = true;
               }
 
-              const isHighlighted = isTrigger || isTouchedVwap || isTouchedFibo || isTargetVwap || isTargetFibo;
               const height = isHighlighted ? 'h-8' : 'h-6';
               const top = isHighlighted ? '-8px' : '-4px';
 
@@ -418,6 +432,10 @@ const App: React.FC = () => {
     const [previousVwaps, setPreviousVwaps] = useState<{ daily: number; weekly: number; monthly: number; } | null>(null);
     const [heikinAshiColor, setHeikinAshiColor] = useState<HeikinAshiColor | null>(null); 
     const [error, setError] = useState<string | null>(null);
+    // NEW: States to hold daily high and low for PivotAndOrdersCard and PivotPointsCard
+    const [lastDailyHigh, setLastDailyHigh] = useState<number | null>(null);
+    const [lastDailyLow, setLastDailyLow] = useState<number | null>(null);
+
 
     const NEWS_UPDATE_INTERVAL_MS = 300000; // 5 minutes
 
@@ -486,6 +504,10 @@ const App: React.FC = () => {
                 if (isNaN(dailyHigh) || isNaN(dailyLow) || isNaN(dailyClose)) {
                     throw new Error('Formato de kline diária inválido recebido da API para cálculo de Pivot Points.');
                 }
+
+                // NEW: Set last daily high and low for PivotAndOrdersCard and PivotPointsCard
+                setLastDailyHigh(dailyHigh);
+                setLastDailyLow(dailyLow);
                 
                 const rsiCloses = rsiKlineData.map((k: any) => parseFloat(k[4]));
                 const currentRsi = calculateRSI(rsiCloses);
@@ -583,9 +605,23 @@ const App: React.FC = () => {
                                     <NewsSentimentCard news={news} nextUpdateTime={nextNewsUpdate} />
                                 </div>
                                 <div className="lg:col-span-2 flex flex-col gap-8"> {/* Adjusted to allow gap */}
-                                    <PivotPointsCard pivots={pivots} signal={signal} vwapBands={vwapBands} weeklyVwapBands={weeklyVwapBands} />
-                                    {pivots && signal && ( 
-                                        <PivotAndOrdersCard pivots={pivots} signal={signal} /> {/* NEW: Render PivotAndOrdersCard */}
+                                    {pivots && signal && vwapBands && weeklyVwapBands && (
+                                        <PivotPointsCard 
+                                            pivots={pivots} 
+                                            signal={signal} 
+                                            vwapBands={vwapBands} 
+                                            weeklyVwapBands={weeklyVwapBands}
+                                            lastDailyHigh={lastDailyHigh} // NEW: Pass lastDailyHigh
+                                            lastDailyLow={lastDailyLow}   // NEW: Pass lastDailyLow
+                                        />
+                                    )}
+                                    {pivots && signal && lastDailyHigh !== null && lastDailyLow !== null && ( 
+                                        <PivotAndOrdersCard 
+                                            pivots={pivots} 
+                                            signal={signal} 
+                                            lastDailyHigh={lastDailyHigh} 
+                                            lastDailyLow={lastDailyLow} 
+                                        /> 
                                     )}
                                 </div>
                                 <div className="lg:col-span-3">

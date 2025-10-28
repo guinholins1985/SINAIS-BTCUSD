@@ -5,6 +5,8 @@ import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, PauseIcon, PlusCircleIcon }
 interface PivotAndOrdersCardProps {
   pivots: PivotPoints | null;
   signal: Signal | null;
+  lastDailyHigh: number; // NEW: Max price of the last completed daily candle
+  lastDailyLow: number;  // NEW: Min price of the last completed daily candle
 }
 
 const formattedPrice = (p: number) => p.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,7 +41,7 @@ const OrderSuggestion: React.FC<{
 };
 
 
-export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, signal }) => {
+export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, signal, lastDailyHigh, lastDailyLow }) => {
   if (!pivots || !signal) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 flex justify-center items-center h-full min-h-[150px]">
@@ -57,7 +59,9 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
     { label: 'S1', value: s1 }, { label: 'S2', value: s2 }, { label: 'S3', value: s3 },
   ].sort((a, b) => a.value - b.value); // Sort ascending for easier processing
 
-  const proximityThreshold = currentPrice * 0.001; // 0.1% for "near" or "testing"
+  const proximityThreshold = currentPrice * 0.001; // 0.1% for "near" or "testing" (for trend direction)
+  // const touchedThreshold = currentPrice * 0.0002; // 0.02% for "touched" or "tested" (for immediate proximity) - REMOVED, now using daily high/low
+
 
   let analysisMessages: string[] = [];
   let currentStatusText = '';
@@ -72,10 +76,12 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
     currentStatusColor = 'text-green-400';
     icon = <ArrowTrendingUpIcon className="h-5 w-5 text-green-400" />;
     
-    // Check if previous supports were sought
-    const soughtSupports = allPivotLevels.filter(level => level.value < currentPrice - proximityThreshold && level.label.startsWith('S'));
+    // Check if previous supports were sought (passed and now behind current price)
+    const soughtSupports = allPivotLevels.filter(level => 
+      level.value < currentPrice - proximityThreshold && level.label.startsWith('S')
+    );
     if (soughtSupports.length > 0) {
-      analysisMessages.push(`O movimento de alta partiu de/testou os suportes: ${soughtSupports.map(s => s.label).join(', ')}.`);
+      analysisMessages.push(`O movimento de alta partiu de/passou pelos suportes: ${soughtSupports.map(s => s.label).join(', ')}. `);
     }
 
     // Find closest resistance above currentPrice as next target
@@ -93,10 +99,12 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
     currentStatusColor = 'text-red-400';
     icon = <ArrowTrendingDownIcon className="h-5 w-5 text-red-400" />;
 
-    // Check if previous resistances were sought
-    const soughtResistances = allPivotLevels.filter(level => level.value > currentPrice + proximityThreshold && level.label.startsWith('R'));
+    // Check if previous resistances were sought (passed and now behind current price)
+    const soughtResistances = allPivotLevels.filter(level => 
+      level.value > currentPrice + proximityThreshold && level.label.startsWith('R')
+    );
     if (soughtResistances.length > 0) {
-      analysisMessages.push(`O movimento de baixa partiu de/testou as resistências: ${soughtResistances.map(r => r.label).join(', ')}.`);
+      analysisMessages.push(`O movimento de baixa partiu de/passou pelas resistências: ${soughtResistances.map(r => r.label).join(', ')}. `);
     }
     
     // Find closest support below currentPrice as next target
@@ -125,11 +133,27 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
     nextTargetColor = 'text-gray-300';
   }
 
-  // Add a general action-based context
-  if (action === SignalAction.BUY && analysisMessages.length === 0) {
-      analysisMessages.push("O sinal de Compra do RSI está ativo. Foco na força dos suportes.");
-  } else if (action === SignalAction.SELL && analysisMessages.length === 0) {
-      analysisMessages.push("O sinal de Venda do RSI está ativo. Foco na fraqueza das resistências.");
+  // --- Levels Touched/Tested Logic (based on last completed daily candle) ---
+  const touchedLevels: { label: string; value: number }[] = [];
+  for (const level of allPivotLevels) {
+    // A level is considered "touched today" if its value was within the last completed daily candle's range
+    if (level.value >= lastDailyLow && level.value <= lastDailyHigh) {
+      touchedLevels.push(level);
+    }
+  }
+
+  if (touchedLevels.length > 0) {
+    const touchedMessage = `Durante o último dia de negociação, o preço tocou/testou os níveis: ${touchedLevels.map(l => `${l.label} (${formattedPrice(l.value)})`).join(', ')}.`;
+    analysisMessages.unshift(touchedMessage); // Add to the beginning of messages
+  }
+
+  // Add a general action-based context if no specific movement messages
+  if (analysisMessages.length === (touchedLevels.length > 0 ? 1 : 0) && action !== SignalAction.HOLD) {
+      if (action === SignalAction.BUY) {
+          analysisMessages.push("O sinal de Compra do RSI está ativo. Foco na força dos suportes.");
+      } else if (action === SignalAction.SELL) {
+          analysisMessages.push("O sinal de Venda do RSI está ativo. Foco na fraqueza das resistências.");
+      }
   }
 
 
@@ -169,7 +193,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'TP / Venda na R1 (Pivot)',
             levelName: 'Resistência 1 (R1)',
             price: r1,
-            explanation: `Venda neste nível de resistência para realizar lucro ou iniciar um short.`
+            explanation: `Venda neste nível de resistência para realizar lucro ou iniciar um short, próximo ao Pivot Central (P).`
         });
     }
     if (r2 > currentPrice) { 
@@ -178,7 +202,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'TP / Venda na R2 (Pivot)',
             levelName: 'Resistência 2 (R2)',
             price: r2,
-            explanation: `Venda neste nível de resistência para realizar lucro ou iniciar um short.`
+            explanation: `Venda neste nível de resistência para realizar lucro ou iniciar um short, próximo ao Pivot Central (P).`
         });
     }
 
@@ -209,7 +233,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'TP / Compra no S1 (Pivot)',
             levelName: 'Suporte 1 (S1)',
             price: s1,
-            explanation: `Compre neste nível de suporte para realizar lucro ou iniciar um long.`
+            explanation: `Compre neste nível de suporte para realizar lucro ou iniciar um long, próximo ao Pivot Central (P).`
         });
     }
     if (s2 < currentPrice) { 
@@ -218,7 +242,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'TP / Compra no S2 (Pivot)',
             levelName: 'Suporte 2 (S2)',
             price: s2,
-            explanation: `Compre neste nível de suporte para realizar lucro ou iniciar um long.`
+            explanation: `Compre neste nível de suporte para realizar lucro ou iniciar um long, próximo ao Pivot Central (P).`
         });
     }
 
@@ -230,7 +254,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'Compra Limite no S1 (Reversão)',
             levelName: 'Suporte 1 (S1)',
             price: s1,
-            explanation: `Considere uma ordem limite de compra no S1, esperando uma reversão de alta neste suporte.`
+            explanation: `Considere uma ordem limite de compra no S1, próximo ao Pivot Central (P), esperando uma reversão de alta neste suporte.`
         });
     }
     if (s2 < currentPrice) {
@@ -239,7 +263,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'Compra Limite no S2 (Reversão)',
             levelName: 'Suporte 2 (S2)',
             price: s2,
-            explanation: `Considere uma ordem limite de compra no S2, esperando uma reversão de alta neste suporte.`
+            explanation: `Considere uma ordem limite de compra no S2, próximo ao Pivot Central (P), esperando uma reversão de alta neste suporte.`
         });
     }
     if (r1 > currentPrice) {
@@ -248,7 +272,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'Venda Limite na R1 (Reversão)',
             levelName: 'Resistência 1 (R1)',
             price: r1,
-            explanation: `Considere uma ordem limite de venda na R1, esperando uma reversão de baixa nesta resistência.`
+            explanation: `Considere uma ordem limite de venda na R1, próximo ao Pivot Central (P), esperando uma reversão de baixa nesta resistência.`
         });
     }
     if (r2 > currentPrice) {
@@ -257,7 +281,7 @@ export const PivotAndOrdersCard: React.FC<PivotAndOrdersCardProps> = ({ pivots, 
             title: 'Venda Limite na R2 (Reversão)',
             levelName: 'Resistência 2 (R2)',
             price: r2,
-            explanation: `Considere uma ordem limite de venda na R2, esperando uma reversão de baixa nesta resistência.`
+            explanation: `Considere uma ordem limite de venda na R2, próximo ao Pivot Central (P), esperando uma reversão de baixa nesta resistência.`
         });
     }
   }
